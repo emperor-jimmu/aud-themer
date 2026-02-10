@@ -14,29 +14,29 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
   - Set up pytest configuration
   - _Requirements: 12.1-12.8_
 
-- [ ] 2. Implement utility functions and base classes
-  - [ ] 2.1 Create core/utils.py with file system utilities
+- [x] 2. Implement utility functions and base classes
+  - [x] 2.1 Create core/utils.py with file system utilities
     - Implement path validation function
     - Implement filename sanitization function
     - Implement file size validation function (>500KB check)
     - _Requirements: 1.1, 8.2, 7.4, 8.4_
   
-  - [ ] 2.2 Write property tests for utility functions
+  - [x] 2.2 Write property tests for utility functions
     - **Property 1: Path Validation Correctness**
     - **Property 14: Filename Sanitization**
     - **Property 13: File Size Validation**
     - **Validates: Requirements 1.1, 8.2, 7.4, 8.4**
   
-  - [ ] 2.3 Create scrapers/base.py with ThemeScraper abstract base class
+  - [x] 2.3 Create scrapers/base.py with ThemeScraper abstract base class
     - Define abstract search_and_download method
     - Define abstract get_source_name method
     - _Requirements: All scraper requirements_
   
-  - [ ] 2.4 Add string similarity matching to core/utils.py
+  - [x] 2.4 Add string similarity matching to core/utils.py
     - Implement name similarity function using difflib.SequenceMatcher
     - _Requirements: 4.3_
   
-  - [ ] 2.5 Write property test for name similarity matching
+  - [x] 2.5 Write property test for name similarity matching
     - **Property 8: Anime Name Similarity Matching**
     - **Validates: Requirements 4.3**
 
