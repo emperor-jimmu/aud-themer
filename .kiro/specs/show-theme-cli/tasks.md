@@ -21,7 +21,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement file size validation function (>500KB check)
     - _Requirements: 1.1, 8.2, 7.4, 8.4_
   
-  - [ ]* 2.2 Write property tests for utility functions
+  - [ ] 2.2 Write property tests for utility functions
     - **Property 1: Path Validation Correctness**
     - **Property 14: Filename Sanitization**
     - **Property 13: File Size Validation**
@@ -36,7 +36,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement name similarity function using difflib.SequenceMatcher
     - _Requirements: 4.3_
   
-  - [ ]* 2.5 Write property test for name similarity matching
+  - [ ] 2.5 Write property test for name similarity matching
     - **Property 8: Anime Name Similarity Matching**
     - **Validates: Requirements 4.3**
 
@@ -49,11 +49,11 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Add rate limiting delays (1-3 seconds)
     - _Requirements: 3.1-3.6, 9.4_
   
-  - [ ]* 3.2 Write property test for search result matching
+  - [ ] 3.2 Write property test for search result matching
     - **Property 7: Search Result Matching**
     - **Validates: Requirements 3.3**
   
-  - [ ]* 3.3 Write unit tests for TelevisionTunes scraper
+  - [ ] 3.3 Write unit tests for TelevisionTunes scraper
     - Test successful search and download flow
     - Test handling of no results
     - Test handling of missing download link
@@ -69,13 +69,13 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement FFmpeg audio extraction
     - _Requirements: 4.1-4.7, 7.1-7.3_
   
-  - [ ]* 4.2 Write property tests for AnimeThemes scraper
+  - [ ] 4.2 Write property tests for AnimeThemes scraper
     - **Property 9: Theme Priority Selection**
     - **Property 10: Format Conversion Consistency**
     - **Property 11: Bitrate Selection Logic**
     - **Validates: Requirements 4.4, 7.1, 7.2**
   
-  - [ ]* 4.3 Write unit tests for AnimeThemes scraper
+  - [ ] 4.3 Write unit tests for AnimeThemes scraper
     - Test API request formatting
     - Test JSON response parsing
     - Test video download
@@ -92,7 +92,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Add rate limiting delays
     - _Requirements: 5.1-5.6, 9.4_
   
-  - [ ]* 5.2 Write unit tests for Themes.moe scraper
+  - [ ] 5.2 Write unit tests for Themes.moe scraper
     - Test search detection
     - Test media element extraction
     - Test handling of missing search functionality
