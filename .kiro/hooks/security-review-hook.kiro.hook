@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "name": "Security Review",
+  "description": "Automatically reviews code changes for security vulnerabilities including buffer overflows, injection flaws, unsafe operations, and other security best practices before write operations",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review this code change for security vulnerabilities including: buffer overflows, SQL/command injection risks, unsafe deserialization, hardcoded credentials, insecure random number generation, path traversal vulnerabilities, unsafe file operations, and other security flaws. If any issues are found, explain them clearly and suggest fixes. If the code is secure, confirm and proceed."
+  },
+  "workspaceFolderName": "aud-themer",
+  "shortName": "security-review-hook"
+}

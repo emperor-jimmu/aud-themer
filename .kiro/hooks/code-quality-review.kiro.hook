@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "name": "Code Quality Review",
+  "description": "Analyzes modified Python source files for code smells, design patterns, and best practices, providing suggestions for improvements in readability, maintainability, and performance",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review the modified code for potential improvements including: code smells, design pattern opportunities, adherence to Python best practices (PEP 8), readability enhancements, maintainability concerns, and performance optimizations. Provide specific, actionable suggestions while respecting the existing functionality and project structure."
+  },
+  "workspaceFolderName": "aud-themer",
+  "shortName": "code-quality-review"
+}

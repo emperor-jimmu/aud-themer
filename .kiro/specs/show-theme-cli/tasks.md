@@ -40,8 +40,8 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - **Property 8: Anime Name Similarity Matching**
     - **Validates: Requirements 4.3**
 
-- [ ] 3. Implement TelevisionTunes scraper
-  - [ ] 3.1 Create scrapers/tv_tunes.py with TelevisionTunesScraper class
+- [x] 3. Implement TelevisionTunes scraper
+  - [x] 3.1 Create scrapers/tv_tunes.py with TelevisionTunesScraper class
     - Implement Playwright-based navigation to televisiontunes.com
     - Implement search functionality
     - Implement result matching logic (exact match or first result)
@@ -49,11 +49,11 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Add rate limiting delays (1-3 seconds)
     - _Requirements: 3.1-3.6, 9.4_
   
-  - [ ] 3.2 Write property test for search result matching
+  - [x] 3.2 Write property test for search result matching
     - **Property 7: Search Result Matching**
     - **Validates: Requirements 3.3**
   
-  - [ ] 3.3 Write unit tests for TelevisionTunes scraper
+  - [x] 3.3 Write unit tests for TelevisionTunes scraper
     - Test successful search and download flow
     - Test handling of no results
     - Test handling of missing download link
