@@ -125,18 +125,24 @@ class AnimeThemesScraper(ThemeScraper):
 
             data = response.json()
 
-            # Handle case where API returns a list instead of dict
-            if isinstance(data, list):
-                self._log_debug("API returned a list instead of dict, no results")
+            # Handle case where API returns unexpected data structure
+            if not isinstance(data, dict):
+                self._log_debug(f"API returned unexpected type: {type(data).__name__}")
                 return None
 
-            anime_list = data.get("search", {}).get("anime", [])
+            # Get search results
+            search_data = data.get("search")
+            if not search_data or not isinstance(search_data, dict):
+                self._log_debug("No valid search data in API response")
+                return None
+
+            anime_list = search_data.get("anime", [])
 
             if self.verbose:
-                anime_count = len(anime_list)
+                anime_count = len(anime_list) if isinstance(anime_list, list) else 0
                 self._log_debug(f"API returned {anime_count} anime results")
 
-            if not anime_list:
+            if not anime_list or not isinstance(anime_list, list):
                 return None
 
             # Filter out non-dict items (API sometimes returns mixed types)
