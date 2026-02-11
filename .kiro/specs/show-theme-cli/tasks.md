@@ -75,15 +75,15 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Mock httpx requests and FFmpeg subprocess
     - _Requirements: 4.1-4.7_
 
-- [ ] 5. Implement Themes.moe scraper
-  - [ ] 5.1 Create scrapers/themes_moe.py with ThemesMoeScraper class
+- [x] 5. Implement Themes.moe scraper
+  - [x] 5.1 Create scrapers/themes_moe.py with ThemesMoeScraper class
     - Implement Playwright-based navigation
     - Implement search detection logic
     - Implement media element extraction
     - Implement download and audio extraction
     - Add rate limiting delays
     - _Requirements: 5.1-5.6, 9.4_
-  - [ ] 5.2 Write unit tests for Themes.moe scraper
+  - [x] 5.2 Write unit tests for Themes.moe scraper
     - Test search detection
     - Test media element extraction
     - Test handling of missing search functionality
