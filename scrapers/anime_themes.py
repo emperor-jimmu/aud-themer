@@ -110,11 +110,12 @@ class AnimeThemesScraper(ThemeScraper):
             Anime data dictionary if found, None otherwise
         """
         with httpx.Client(timeout=self.TIMEOUT) as client:
+            # Use the anime index endpoint with name filter instead of search
             response = client.get(
-                f"{self.BASE_URL}/search",
+                f"{self.BASE_URL}/anime",
                 params={
-                    "q": show_name,
-                    "include[anime]": "animethemes.animethemeentries.videos"
+                    "filter[name]": show_name,
+                    "include": "animethemes.animethemeentries.videos"
                 }
             )
 
@@ -130,13 +131,8 @@ class AnimeThemesScraper(ThemeScraper):
                 self._log_debug(f"API returned unexpected type: {type(data).__name__}")
                 return None
 
-            # Get search results
-            search_data = data.get("search")
-            if not search_data or not isinstance(search_data, dict):
-                self._log_debug("No valid search data in API response")
-                return None
-
-            anime_list = search_data.get("anime", [])
+            # Get anime list from response
+            anime_list = data.get("anime", [])
 
             if self.verbose:
                 anime_count = len(anime_list) if isinstance(anime_list, list) else 0
