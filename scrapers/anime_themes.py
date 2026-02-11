@@ -153,9 +153,17 @@ class AnimeThemesScraper(ThemeScraper):
         backoff_factor=Config.RETRY_BACKOFF_FACTOR,
         exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
     )
+    @retry_with_backoff(
+        max_attempts=Config.MAX_RETRY_ATTEMPTS,
+        initial_delay=Config.RETRY_INITIAL_DELAY_SEC,
+        backoff_factor=Config.RETRY_BACKOFF_FACTOR,
+        exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
+    )
     def _search_anime_with_retry(self, show_name: str) -> Optional[Dict[str, Any]]:
         """
         Internal method with retry logic for network timeouts.
+        Uses the search endpoint which handles both English and Japanese names,
+        as well as alternative titles.
 
         Args:
             show_name: Name of the anime to search for
@@ -164,12 +172,12 @@ class AnimeThemesScraper(ThemeScraper):
             Anime data dictionary if found, None otherwise
         """
         with httpx.Client(timeout=self.timeout) as client:
-            # Use the anime index endpoint with name filter instead of search
+            # Use the search endpoint which handles alternative titles
             response = client.get(
-                f"{self.BASE_URL}/anime",
+                f"{self.BASE_URL}/search",
                 params={
-                    "filter[name]": show_name,
-                    "include": "animethemes.animethemeentries.videos"
+                    "q": show_name,
+                    "fields[search]": "anime"
                 }
             )
 
@@ -191,8 +199,9 @@ class AnimeThemesScraper(ThemeScraper):
                 self._log_debug(f"API returned unexpected type: {type(data).__name__}")
                 return None
 
-            # Get anime list from response
-            anime_list = data.get("anime", [])
+            # Get anime list from search results
+            search_data = data.get("search", {})
+            anime_list = search_data.get("anime", [])
 
             if self.verbose:
                 anime_count = len(anime_list) if isinstance(anime_list, list) else 0
@@ -207,17 +216,41 @@ class AnimeThemesScraper(ThemeScraper):
             if not anime_list:
                 return None
 
-            # Find best match by name similarity
-            best_match = max(
-                anime_list,
-                key=lambda a: SequenceMatcher(
-                    None,
-                    show_name.lower(),
-                    a.get("name", "").lower()
-                ).ratio()
+            # The search endpoint handles alternative titles internally
+            # and returns results sorted by relevance. For most queries,
+            # the first result is the best match.
+            best_match = anime_list[0]
+            
+            if self.verbose:
+                match_name = best_match.get("name", "Unknown")
+                self._log_debug(f"Selected best match: {match_name}")
+
+            # Now fetch the full anime data with themes included
+            anime_slug = best_match.get("slug")
+            if not anime_slug:
+                return None
+
+            self._log_debug(f"Fetching full data for anime slug: {anime_slug}")
+
+            # Fetch full anime data with themes
+            full_response = client.get(
+                f"{self.BASE_URL}/anime/{anime_slug}",
+                params={
+                    "include": "animethemes.animethemeentries.videos"
+                }
             )
 
-            return best_match
+            if full_response.status_code != 200:
+                self.logger.warning(
+                    f"Failed to fetch full anime data: {full_response.status_code}"
+                )
+                return None
+
+            full_data = full_response.json()
+            anime_data = full_data.get("anime")
+
+            return anime_data if isinstance(anime_data, dict) else None
+
 
     def _find_best_theme(self, anime_data: Dict[str, Any]) -> Optional[str]:
         """
