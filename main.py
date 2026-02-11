@@ -91,7 +91,7 @@ def main(
     """
     # Handle version flag
     if version:
-        console.print(f"[bold cyan]Show Theme CLI[/bold cyan] version [bold]{__version__}[/bold]")
+        console.print(f"[bold dodger_blue1]Show Theme CLI[/bold dodger_blue1] version [bold]{__version__}[/bold]")
         sys.exit(0)
 
     # Validate input_dir is provided
@@ -103,14 +103,17 @@ def main(
     # Start timing
     start_time = time.time()
 
-    console.print(f"[bold cyan]Show Theme CLI[/bold cyan] [dim]v{__version__}[/dim]\n")
+    console.print(f"[bold dodger_blue1]Show Theme CLI[/bold dodger_blue1] [dim]v{__version__}[/dim]\n")
 
-    # Setup error logging to file
+    # Setup comprehensive logging to file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = Path(f"errors-{timestamp}.log")
+    log_file = Path(f"show-theme-cli-{timestamp}.log")
+    
+    # Set logging level based on verbose flag
+    log_level = logging.DEBUG if verbose else logging.INFO
     
     logging.basicConfig(
-        level=logging.ERROR,
+        level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(log_file),
@@ -118,6 +121,13 @@ def main(
         ]
     )
     logger = logging.getLogger(__name__)
+    
+    # Log startup information
+    logger.info(f"Show Theme CLI v{__version__} started")
+    logger.info(f"Input directory: {input_dir}")
+    logger.info(f"Force mode: {force}")
+    logger.info(f"Dry run: {dry_run}")
+    logger.info(f"Timeout: {timeout}s")
 
     # Validate dependencies before processing
     validate_dependencies(console)
@@ -134,6 +144,7 @@ def main(
         else:
             time_str = f"{seconds}s"
         console.print(f"\n[dim]Completed in {time_str}[/dim]")
+        logger.info(f"Processing completed in {time_str}")
     except CriticalError as e:
         logger.error(f"Critical error: {str(e)}", exc_info=True)
         console.print(f"[red]CRITICAL ERROR:[/] {str(e)}")
@@ -149,9 +160,8 @@ def main(
             console.print(traceback.format_exc())
         sys.exit(1)
     finally:
-        # Only show log file message if errors were logged
-        if log_file.exists() and log_file.stat().st_size > 0:
-            console.print(f"\n[dim]Error log saved to: {log_file}[/dim]")
+        # Always show log file location
+        console.print(f"\n[dim]Activity log saved to: {log_file}[/dim]")
 
 
 if __name__ == "__main__":

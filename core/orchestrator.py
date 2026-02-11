@@ -13,6 +13,7 @@ from scrapers.youtube import YoutubeScraper
 from core.config import Config
 from core.rate_limiter import RateLimiter
 from core.logging_utils import StructuredLogger
+from core.utils import get_file_size_formatted, get_audio_duration
 
 
 class CriticalError(Exception):
@@ -101,18 +102,22 @@ class Orchestrator:
         if not input_dir.is_dir():
             raise CriticalError(f"Input path is not a directory: {input_dir}")
 
+        self.logger.info(f"Scanning directory: {input_dir}")
         series_folders = self._scan_directory(input_dir)
 
         if not series_folders:
             self.console.print("[yellow]No series folders found[/]")
+            self.logger.warning("No series folders found in input directory")
             return
 
         total_folders = len(series_folders)
-        self.console.print(f"[bold cyan]Found {total_folders} series folders[/bold cyan]\n")
+        self.console.print(f"[bold dodger_blue1]Found {total_folders} series folders[/bold dodger_blue1]\n")
+        self.logger.info(f"Found {total_folders} series folders to process")
 
         # Process folders sequentially (simpler and safer than async)
         for index, folder in enumerate(series_folders, start=1):
             self.console.print(f"\n[bold magenta]━━━ Folder {index}/{total_folders} ━━━[/bold magenta]")
+            self.logger.info(f"Processing folder {index}/{total_folders}: {folder.name}")
             try:
                 self.process_show(folder)
             except CriticalError:
@@ -132,6 +137,10 @@ class Orchestrator:
                     self.console.print(traceback.format_exc())
                 self.results["failed"] += 1
 
+        self.logger.info(
+            f"Processing complete - Success: {self.results['success']}, "
+            f"Skipped: {self.results['skipped']}, Failed: {self.results['failed']}"
+        )
         self.display_summary()
 
 
@@ -229,11 +238,13 @@ class Orchestrator:
 
         if existing_theme and not self.force:
             self.console.print(f"[dim yellow]⊘ SKIPPED[/dim yellow] {show_name} [dim]- File exists[/dim]")
+            self.logger.info(f"Skipped '{show_name}' - theme file already exists")
             self.results["skipped"] += 1
             return
 
         if self.dry_run:
             self.console.print(f"[bright_blue]⚡ DRY RUN[/bright_blue] Would process: {show_name}")
+            self.logger.info(f"Dry run - would process '{show_name}'")
             return
 
         # If force mode is enabled and a theme exists, delete it before downloading
@@ -242,17 +253,20 @@ class Orchestrator:
                 existing_theme.unlink()
                 if self.verbose:
                     self.console.print(f"  Deleted existing theme: {existing_theme.name}")
+                self.logger.info(f"Deleted existing theme for '{show_name}' (force mode)")
             except OSError as exc:
                 self.console.print(
                     f"[yellow]Warning: Could not delete existing theme: {str(exc)}[/]"
                 )
+                self.logger.warning(f"Could not delete existing theme: {str(exc)}")
 
         # Try each scraper in order (waterfall approach)
-        self.console.print(f"\n[bold white]Processing:[/bold white] [cyan]{show_name}[/cyan]")
+        self.console.print(f"\n[bold white]Processing:[/bold white] [dodger_blue1]{show_name}[/dodger_blue1]")
 
         for scraper in self.scrapers:
             source_name = scraper.get_source_name()
             self.console.print(f"  [dim]Trying[/dim] {source_name}...", end="")
+            self.logger.info(f"Attempting source: {source_name} for '{show_name}'")
 
             # Apply rate limiting before attempting scraper
             self.rate_limiter.wait(source_name)
@@ -260,14 +274,27 @@ class Orchestrator:
             try:
                 if scraper.search_and_download(show_name, theme_file):
                     self.console.print(f" [bold green]✓[/bold green]")
+                    
+                    # Get file metadata
+                    file_size = get_file_size_formatted(theme_file)
+                    duration = get_audio_duration(theme_file)
+                    
                     self.console.print(
-                        f"[bold green]✓ SUCCESS[/bold green] [dim]Source:[/dim] {source_name} [dim]|[/dim] "
-                        f"[dim]File:[/dim] {theme_file.name}"
+                        f"[bold green]✓ SUCCESS[/bold green] [dim]Source:[/dim] {source_name} "
+                        f"[dim]|[/dim] {file_size} [dim]|[/dim] {duration}"
                     )
+                    
+                    # Log success with details
+                    self.logger.info(
+                        f"Successfully downloaded theme for '{show_name}' from {source_name} "
+                        f"(size: {file_size}, duration: {duration})"
+                    )
+                    
                     self.results["success"] += 1
                     return
                 else:
                     self.console.print(f" [red]✗[/red]")
+                    self.logger.info(f"Source {source_name} failed for '{show_name}'")
             except OSError as exc:
                 # Handle disk space and permission errors during download
                 self.console.print(f" [red]✗[/]")
@@ -308,11 +335,12 @@ class Orchestrator:
                     self.console.print(f"    Error: {str(exc)}")
 
         self.console.print(f"[bold red]✗ FAILED[/bold red] [dim]No sources found for[/dim] {show_name}")
+        self.logger.warning(f"All sources failed for '{show_name}'")
         self.results["failed"] += 1
 
     def display_summary(self) -> None:
         """Display results summary table."""
-        table = Table(title="\n[bold cyan]Processing Summary[/bold cyan]", border_style="cyan")
+        table = Table(title="\n[bold dodger_blue1]Processing Summary[/bold dodger_blue1]", border_style="dodger_blue1")
         table.add_column("Status", style="bold", no_wrap=True)
         table.add_column("Count", justify="right", style="bold")
 

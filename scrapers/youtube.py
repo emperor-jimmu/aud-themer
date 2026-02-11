@@ -121,6 +121,7 @@ class YoutubeScraper(ThemeScraper):
                 }
 
                 # First, extract video info to check duration
+                self._log_info(f"YouTube: Extracting video info for query: {query}")
                 with yt_dlp.YoutubeDL(info_opts) as ydl:
                     info = ydl.extract_info(query, download=False)
 
@@ -128,16 +129,22 @@ class YoutubeScraper(ThemeScraper):
                     if 'entries' in info:
                         if not info['entries']:
                             self._log_debug("No results found, trying next query")
+                            self._log_info(f"YouTube: No results for query: {query}")
                             continue
                         info = info['entries'][0]
 
                     duration = info.get('duration', 0)
+                    video_title = info.get('title', 'Unknown')
+                    self._log_info(f"YouTube: Found video '{video_title}' - Duration: {duration}s")
 
                     # Skip if video is longer than max duration
                     if duration > Config.MAX_VIDEO_DURATION_SEC:
                         self._log_debug(
                             f"Video too long ({duration}s > {Config.MAX_VIDEO_DURATION_SEC}s), "
                             f"trying next query"
+                        )
+                        self._log_info(
+                            f"YouTube: Video too long ({duration}s), skipping"
                         )
                         continue
 
@@ -176,12 +183,14 @@ class YoutubeScraper(ThemeScraper):
                     ydl_opts['progress_hooks'] = [progress_hook]
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    self._log_info(f"YouTube: Starting download for query: {query}")
                     ydl.download([query])
 
                 # yt-dlp adds .mp3 extension automatically
                 final_path = output_path.with_suffix('.mp3')
                 if not final_path.exists():
                     self._log_debug("Output file not found after download")
+                    self._log_warning("YouTube: Output file not found after download")
                     continue
 
                 # Rename if needed (in case output_path already has .mp3)
@@ -189,19 +198,23 @@ class YoutubeScraper(ThemeScraper):
                     final_path.rename(output_path)
 
                 # Validate file size
-                if output_path.stat().st_size < Config.MIN_FILE_SIZE_BYTES:
+                file_size = output_path.stat().st_size
+                if file_size < Config.MIN_FILE_SIZE_BYTES:
                     self._log_debug(
-                        f"File too small: {output_path.stat().st_size} bytes "
+                        f"File too small: {file_size} bytes "
                         f"(min: {Config.MIN_FILE_SIZE_BYTES})"
                     )
+                    self._log_warning(f"YouTube: File too small ({file_size} bytes), skipping")
                     output_path.unlink()
                     continue
 
                 self._log_debug(f"Download successful: {output_path}")
+                self._log_info(f"YouTube: Download successful - Size: {file_size} bytes")
                 return True
 
             except Exception as exc:
                 self._log_debug(f"Query '{query}' failed: {str(exc)}")
+                self._log_error(f"YouTube: Query '{query}' failed: {str(exc)}", exc_info=True)
                 continue
 
         # All queries failed

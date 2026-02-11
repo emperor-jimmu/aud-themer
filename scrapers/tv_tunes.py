@@ -114,9 +114,11 @@ class TelevisionTunesScraper(ThemeScraper):
                     page.on("console", lambda msg: self._log_debug(f"Browser console: {msg.text}"))
 
                 self._log_debug(f"Navigating to {self.BASE_URL}")
+                self._log_info(f"TelevisionTunes: Navigating to {self.BASE_URL}")
 
                 # Navigate to homepage
                 page.goto(self.BASE_URL, timeout=self.timeout_ms)
+                self._log_info("TelevisionTunes: Page loaded successfully")
 
                 # Strip year from show name for search (e.g., "The Simpsons (1989)" -> "The Simpsons")
                 search_query = show_name.split('(')[0].strip()
@@ -158,8 +160,14 @@ class TelevisionTunesScraper(ThemeScraper):
 
                 # Download file using page.request instead of clicking
                 response = page.request.get(download_url)
+                self._log_info(
+                    f"TelevisionTunes: Download request - Status: {response.status}, "
+                    f"Size: {len(response.body())} bytes"
+                )
+                
                 if response.status != 200:
                     self._log_debug(f"Download failed with status: {response.status}")
+                    self._log_warning(f"TelevisionTunes: Download failed - Status: {response.status}")
                     return False
 
                 # Save the file

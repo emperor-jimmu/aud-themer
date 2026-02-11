@@ -113,6 +113,7 @@ class ThemesMoeScraper(ThemeScraper):
 
                 # Navigate to homepage
                 page.goto(self.BASE_URL, timeout=self.timeout_ms)
+                self._log_info("Themes.moe: Page loaded successfully")
 
                 # Click the dropdown button to select "Anime Search" mode
                 dropdown_button = page.locator(
@@ -186,8 +187,14 @@ class ThemesMoeScraper(ThemeScraper):
 
                 # Download media
                 response = page.request.get(media_url)
+                self._log_info(
+                    f"Themes.moe: Download request - Status: {response.status}, "
+                    f"Size: {len(response.body())} bytes"
+                )
+                
                 if response.status != 200:
                     self._log_debug(f"Media download failed with status: {response.status}")
+                    self._log_warning(f"Themes.moe: Download failed - Status: {response.status}")
                     return False
 
                 # Save file

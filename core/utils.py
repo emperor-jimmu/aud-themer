@@ -139,3 +139,67 @@ def retry_with_backoff(
 
         return wrapper
     return decorator
+
+
+def get_file_size_formatted(file_path: Path) -> str:
+    """
+    Get formatted file size string.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        Formatted file size string (e.g., "2.5 MB", "512 KB")
+    """
+    if not file_path.exists():
+        return "0 B"
+    
+    size_bytes = file_path.stat().st_size
+    
+    # Convert to appropriate unit
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def get_audio_duration(file_path: Path) -> str:
+    """
+    Get audio duration using ffprobe.
+
+    Args:
+        file_path: Path to the audio file
+
+    Returns:
+        Formatted duration string (e.g., "3:45", "1:23") or "unknown" if unable to determine
+    """
+    import subprocess
+    
+    if not file_path.exists():
+        return "unknown"
+    
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(file_path)
+            ],
+            capture_output=True,
+            timeout=5,
+            check=False
+        )
+        
+        if result.returncode == 0 and result.stdout:
+            duration_seconds = float(result.stdout.decode().strip())
+            minutes = int(duration_seconds // 60)
+            seconds = int(duration_seconds % 60)
+            return f"{minutes}:{seconds:02d}"
+        
+        return "unknown"
+    except (subprocess.TimeoutExpired, ValueError, Exception):
+        return "unknown"

@@ -174,8 +174,14 @@ class AnimeThemesScraper(ThemeScraper):
             )
 
             self._log_debug(f"API response status: {response.status_code}")
+            self.logger.info(
+                f"AnimeThemes API request for '{show_name}' - Status: {response.status_code}"
+            )
 
             if response.status_code != 200:
+                self.logger.warning(
+                    f"AnimeThemes API returned non-200 status: {response.status_code}"
+                )
                 return None
 
             data = response.json()

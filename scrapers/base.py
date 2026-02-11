@@ -42,6 +42,24 @@ class ThemeScraper(ABC):
         """
         self.logger.error(message, exc_info=exc_info)
 
+    def _log_info(self, message: str) -> None:
+        """
+        Log an info message to the log file.
+
+        Args:
+            message: Info message to log
+        """
+        self.logger.info(message)
+
+    def _log_warning(self, message: str) -> None:
+        """
+        Log a warning message to the log file.
+
+        Args:
+            message: Warning message to log
+        """
+        self.logger.warning(message)
+
     @abstractmethod
     def search_and_download(self, show_name: str, output_path: Path) -> bool:
         """
