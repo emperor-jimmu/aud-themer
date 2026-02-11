@@ -122,33 +122,44 @@ class YoutubeScraper(ThemeScraper):
 
                 # First, extract video info to check duration
                 self._log_info(f"YouTube: Extracting video info for query: {query}")
-                with yt_dlp.YoutubeDL(info_opts) as ydl:
-                    info = ydl.extract_info(query, download=False)
+                try:
+                    with yt_dlp.YoutubeDL(info_opts) as ydl:
+                        info = ydl.extract_info(query, download=False)
 
-                    # Handle search results
-                    if 'entries' in info:
-                        if not info['entries']:
-                            self._log_debug("No results found, trying next query")
-                            self._log_info(f"YouTube: No results for query: {query}")
+                        # Handle search results
+                        if 'entries' in info:
+                            if not info['entries']:
+                                self._log_debug("No results found, trying next query")
+                                self._log_info(f"YouTube: No results for query: {query}")
+                                continue
+                            info = info['entries'][0]
+
+                        duration = info.get('duration', 0)
+                        video_title = info.get('title', 'Unknown')
+                        self._log_info(f"YouTube: Found video '{video_title}' - Duration: {duration}s")
+
+                        # Skip if video is longer than max duration
+                        if duration > Config.MAX_VIDEO_DURATION_SEC:
+                            self._log_debug(
+                                f"Video too long ({duration}s > {Config.MAX_VIDEO_DURATION_SEC}s), "
+                                f"trying next query"
+                            )
+                            self._log_info(
+                                f"YouTube: Video too long ({duration}s), skipping"
+                            )
                             continue
-                        info = info['entries'][0]
 
-                    duration = info.get('duration', 0)
-                    video_title = info.get('title', 'Unknown')
-                    self._log_info(f"YouTube: Found video '{video_title}' - Duration: {duration}s")
-
-                    # Skip if video is longer than max duration
-                    if duration > Config.MAX_VIDEO_DURATION_SEC:
-                        self._log_debug(
-                            f"Video too long ({duration}s > {Config.MAX_VIDEO_DURATION_SEC}s), "
-                            f"trying next query"
-                        )
-                        self._log_info(
-                            f"YouTube: Video too long ({duration}s), skipping"
-                        )
+                        self._log_debug(f"Video duration: {duration}s (within limit)")
+                
+                except yt_dlp.utils.DownloadError as exc:
+                    error_msg = str(exc)
+                    # Check if this is a video unavailability error
+                    if 'not available' in error_msg.lower() or 'unavailable' in error_msg.lower():
+                        self._log_info(f"YouTube: Video unavailable for query '{query}', trying next query")
+                        self._log_debug(f"Video unavailability details: {error_msg}")
                         continue
-
-                    self._log_debug(f"Video duration: {duration}s (within limit)")
+                    # For other download errors, re-raise to be caught by outer handler
+                    raise
 
                 # Configure yt-dlp options for download
                 ydl_opts = {
@@ -182,9 +193,19 @@ class YoutubeScraper(ThemeScraper):
 
                     ydl_opts['progress_hooks'] = [progress_hook]
 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    self._log_info(f"YouTube: Starting download for query: {query}")
-                    ydl.download([query])
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        self._log_info(f"YouTube: Starting download for query: {query}")
+                        ydl.download([query])
+                except yt_dlp.utils.DownloadError as exc:
+                    error_msg = str(exc)
+                    # Check if this is a video unavailability error
+                    if 'not available' in error_msg.lower() or 'unavailable' in error_msg.lower():
+                        self._log_info(f"YouTube: Video unavailable during download for query '{query}', trying next query")
+                        self._log_debug(f"Video unavailability details: {error_msg}")
+                        continue
+                    # For other download errors, re-raise to be caught by outer handler
+                    raise
 
                 # yt-dlp adds .mp3 extension automatically
                 final_path = output_path.with_suffix('.mp3')
@@ -212,6 +233,17 @@ class YoutubeScraper(ThemeScraper):
                 self._log_info(f"YouTube: Download successful - Size: {file_size} bytes")
                 return True
 
+            except yt_dlp.utils.DownloadError as exc:
+                error_msg = str(exc)
+                # Check if this is a video unavailability error
+                if 'not available' in error_msg.lower() or 'unavailable' in error_msg.lower():
+                    self._log_info(f"YouTube: Video unavailable for query '{query}', trying next query")
+                    self._log_debug(f"Video unavailability details: {error_msg}")
+                else:
+                    # For other download errors, log as error
+                    self._log_debug(f"Query '{query}' failed: {error_msg}")
+                    self._log_error(f"YouTube: Query '{query}' failed: {error_msg}", exc_info=True)
+                continue
             except Exception as exc:
                 self._log_debug(f"Query '{query}' failed: {str(exc)}")
                 self._log_error(f"YouTube: Query '{query}' failed: {str(exc)}", exc_info=True)
