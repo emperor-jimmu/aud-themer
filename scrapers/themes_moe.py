@@ -45,10 +45,11 @@ class ThemesMoeScraper(ThemeScraper):
                 page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
                 
                 # Find audio/video element
-                media = page.locator("audio source, video source").first
-                if media.count() == 0:
+                media_locator = page.locator("audio source, video source")
+                if media_locator.count() == 0:
                     return False
                 
+                media = media_locator.first
                 media_url = media.get_attribute("src")
                 if not media_url:
                     return False

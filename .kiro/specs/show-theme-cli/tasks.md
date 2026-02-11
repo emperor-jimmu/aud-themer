@@ -104,7 +104,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Mock yt-dlp operations
     - _Requirements: 6.1-6.5_
 
-- [ ] 7. Checkpoint - Ensure all scraper tests pass
+- [x] 7. Checkpoint - Ensure all scraper tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement orchestration logic

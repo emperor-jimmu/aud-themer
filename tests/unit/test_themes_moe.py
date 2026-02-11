@@ -44,7 +44,9 @@ def test_successful_search_and_download_audio():
             
             # Mock media element with audio URL
             mock_media.count.return_value = 1
-            mock_media.get_attribute.return_value = "https://themes.moe/audio/test.mp3"
+            mock_media_element = MagicMock()
+            mock_media_element.get_attribute.return_value = "https://themes.moe/audio/test.mp3"
+            mock_media.first = mock_media_element
             
             # Mock successful download
             mock_response.status = 200
