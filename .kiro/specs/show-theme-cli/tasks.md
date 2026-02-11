@@ -54,12 +54,12 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Use Playwright request interception for mocking
     - _Requirements: 3.1-3.6_
 
-- [x] 4. Implement AnimeThemes API scraper
+- [-] 4. Implement AnimeThemes API scraper
   - [x] 4.1 Create scrapers/anime_themes.py with AnimeThemesScraper class
-    - Implement API search using httpx
+    - Implement API search using httpx with async/await for better performance
     - Implement anime name matching logic
     - Implement theme priority selection (OP1 > OP > ED)
-    - Implement video download functionality
+    - Implement video download functionality with async streaming
     - Implement FFmpeg audio extraction
     - _Requirements: 4.1-4.7, 7.1-7.3_
   - [x] 4.2 Write property tests for AnimeThemes scraper
@@ -70,9 +70,9 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
   - [x] 4.3 Write unit tests for AnimeThemes scraper
     - Test API request formatting
     - Test JSON response parsing
-    - Test video download
+    - Test async video download
     - Test FFmpeg audio extraction
-    - Mock httpx requests and FFmpeg subprocess
+    - Mock httpx async requests and FFmpeg subprocess
     - _Requirements: 4.1-4.7_
 
 - [x] 5. Implement Themes.moe scraper
@@ -114,6 +114,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement existing theme file detection (check .mp3, .flac, .wav)
     - Implement force mode logic
     - Implement dry-run mode logic
+    - Support async scraper execution for better performance
     - _Requirements: 1.1-1.5, 2.1-2.5_
   - [x] 8.2 Write property tests for orchestrator
     - **Property 2: Directory Scanning Completeness**
@@ -231,8 +232,9 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Exit with error code 1
     - _Requirements: 12.7_
   - [ ] 14.2 Add Playwright browser installation check
-    - Verify Playwright browsers are installed
-    - Display installation instructions if missing
+    - Verify Playwright browsers are installed using try/catch
+    - Catch playwright.\_impl.\_api_types.Error for missing browser detection
+    - Display installation instructions if missing (playwright install chromium)
     - _Requirements: 12.4_
 
 - [ ] 15. Final polish and documentation

@@ -1,5 +1,6 @@
 """Orchestration logic for theme song retrieval."""
 
+import asyncio
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -21,13 +22,15 @@ class Orchestrator:
     """Orchestrates theme song retrieval across multiple sources."""
     
     THEME_EXTENSIONS = ['.mp3', '.flac', '.wav']
+    DEFAULT_CONCURRENCY = 3  # Process 3 shows concurrently by default
     
     def __init__(
         self,
         console: Console,
         force: bool = False,
         dry_run: bool = False,
-        verbose: bool = False
+        verbose: bool = False,
+        max_concurrent: int = DEFAULT_CONCURRENCY
     ):
         """
         Initialize the orchestrator.
@@ -37,17 +40,20 @@ class Orchestrator:
             force: If True, overwrite existing theme files
             dry_run: If True, simulate operations without downloading
             verbose: If True, enable debug logging
+            max_concurrent: Maximum number of shows to process concurrently
         """
         self.console = console
         self.force = force
         self.dry_run = dry_run
         self.verbose = verbose
+        self.max_concurrent = max_concurrent
         self.scrapers: List[ThemeScraper] = []
         self.results = {
             "success": 0,
             "skipped": 0,
             "failed": 0
         }
+        self._results_lock = asyncio.Lock()
         
         # Initialize scrapers in priority order
         self._initialize_default_scrapers()
@@ -104,24 +110,50 @@ class Orchestrator:
         total_folders = len(series_folders)
         self.console.print(f"Found {total_folders} series folders\n")
         
-        for index, folder in enumerate(series_folders, start=1):
-            self.console.print(f"\n[bold cyan]Folder {index}/{total_folders}[/bold cyan]")
-            try:
-                self.process_show(folder)
-            except CriticalError:
-                # Re-raise critical errors to stop execution
-                raise
-            except Exception as e:
-                # Log non-critical errors and continue processing
-                self.console.print(
-                    f"[red]ERROR[/] Unexpected error processing {folder.name}: {str(e)}"
-                )
-                if self.verbose:
-                    import traceback
-                    self.console.print(traceback.format_exc())
-                self.results["failed"] += 1
+        # Run async processing
+        asyncio.run(self._process_folders_async(series_folders))
         
         self.display_summary()
+    
+    async def _process_folders_async(self, folders: List[Path]) -> None:
+        """
+        Process folders concurrently with limited concurrency.
+        
+        Args:
+            folders: List of series folders to process
+        """
+        semaphore = asyncio.Semaphore(self.max_concurrent)
+        total_folders = len(folders)
+        
+        async def process_with_semaphore(folder: Path, index: int) -> None:
+            async with semaphore:
+                self.console.print(f"\n[bold cyan]Folder {index}/{total_folders}[/bold cyan]")
+                try:
+                    # Run the synchronous process_show in a thread pool
+                    await asyncio.to_thread(self.process_show, folder)
+                except CriticalError:
+                    # Re-raise critical errors to stop execution
+                    raise
+                except Exception as e:
+                    # Log non-critical errors and continue processing
+                    self.console.print(
+                        f"[red]ERROR[/] Unexpected error processing {folder.name}: {str(e)}"
+                    )
+                    if self.verbose:
+                        import traceback
+                        self.console.print(traceback.format_exc())
+                    async with self._results_lock:
+                        self.results["failed"] += 1
+        
+        # Create tasks for all folders
+        tasks = [
+            process_with_semaphore(folder, index)
+            for index, folder in enumerate(folders, start=1)
+        ]
+        
+        # Wait for all tasks to complete
+        # gather will propagate the first exception (including CriticalError)
+        await asyncio.gather(*tasks)
     
     def _scan_directory(self, input_dir: Path) -> List[Path]:
         """
@@ -180,9 +212,10 @@ class Orchestrator:
                 return theme_file
         return None
     
+    
     def process_show(self, folder: Path) -> None:
         """
-        Process a single show folder.
+        Process a single show folder (synchronous version).
         
         Args:
             folder: Path to series folder
@@ -234,7 +267,7 @@ class Orchestrator:
                     f"[yellow]Warning: Could not delete existing theme: {str(e)}[/]"
                 )
         
-        # Try each scraper in order
+        # Try each scraper in order (waterfall approach)
         self.console.print(f"\n[bold]Processing:[/] {show_name}")
         
         for scraper in self.scrapers:
