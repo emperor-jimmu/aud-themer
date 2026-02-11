@@ -101,13 +101,22 @@ class ThemesMoeScraper(ThemeScraper):
                 search_input.first.press("Enter")
                 page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
+                # Wait a bit for the page to update
+                page.wait_for_timeout(1000)
+
                 # Check for "no results" message
                 no_results = page.locator("text=/No anime found|No results available/i")
                 if no_results.count() > 0:
                     self._log_debug("No anime found in search results")
                     return False
 
-                # Wait for the results table to appear
+                # Wait for the results table to appear (with timeout)
+                try:
+                    page.wait_for_selector("table", timeout=5000)
+                except PlaywrightTimeoutError:
+                    self._log_debug("Results table did not load in time")
+                    return False
+
                 table = page.locator("table")
                 if table.count() == 0:
                     self._log_debug("No results table found")
