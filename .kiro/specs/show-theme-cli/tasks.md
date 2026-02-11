@@ -107,15 +107,15 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
 - [x] 7. Checkpoint - Ensure all scraper tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement orchestration logic
-  - [ ] 8.1 Create core/orchestrator.py with Orchestrator class
+- [x] 8. Implement orchestration logic
+  - [x] 8.1 Create core/orchestrator.py with Orchestrator class
     - Implement directory scanning logic
     - Implement show name extraction
     - Implement existing theme file detection (check .mp3, .flac, .wav)
     - Implement force mode logic
     - Implement dry-run mode logic
     - _Requirements: 1.1-1.5, 2.1-2.5_
-  - [ ]\* 8.2 Write property tests for orchestrator
+  - [x] 8.2 Write property tests for orchestrator
     - **Property 2: Directory Scanning Completeness**
     - **Property 3: Show Name Extraction Consistency**
     - **Property 4: Dry Run File Safety**
@@ -123,18 +123,18 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - **Property 6: Force Mode Override**
     - **Property 19: Multiple Theme Format Detection**
     - **Validates: Requirements 1.2, 1.4, 1.5, 2.1, 2.2, 2.4, 2.5**
-  - [ ] 8.3 Implement source waterfall logic in Orchestrator
+  - [x] 8.3 Implement source waterfall logic in Orchestrator
     - Implement scraper priority ordering
     - Implement fallback mechanism (try next source on failure)
     - Implement success/skip/failure tracking
     - _Requirements: All scraper requirements_
-  - [ ] 8.4 Implement progress display with folder progression
+  - [x] 8.4 Implement progress display with folder progression
     - Add folder index/total count display
     - Add colored status indicators (green/yellow/red)
     - Add source attempt display
     - Add success/skip/failure messages
     - _Requirements: 10.1-10.8_
-  - [ ] 8.5 Implement results summary table
+  - [x] 8.5 Implement results summary table
     - Create Rich table with success/skip/failure counts
     - Display at end of processing
     - _Requirements: 10.5_
