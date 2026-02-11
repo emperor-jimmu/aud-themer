@@ -53,9 +53,17 @@ class TelevisionTunesScraper(ThemeScraper):
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             
+            # Enable Playwright tracing in verbose mode
+            if self.verbose:
+                page.on("console", lambda msg: self._log_debug(f"Browser console: {msg.text}"))
+            
             try:
+                self._log_debug(f"Navigating to {self.BASE_URL}")
+                
                 # Navigate to homepage
                 page.goto(self.BASE_URL, timeout=self.TIMEOUT)
+                
+                self._log_debug(f"Searching for: {show_name}")
                 
                 # Locate and fill search field
                 search_input = page.locator("#search_field")
@@ -68,7 +76,10 @@ class TelevisionTunesScraper(ThemeScraper):
                 # Find best matching result
                 result = self._find_best_match(page, show_name)
                 if not result:
+                    self._log_debug("No matching results found")
                     return False
+                
+                self._log_debug("Found matching result, navigating to song page")
                 
                 # Navigate to song page
                 result.click()
@@ -77,7 +88,10 @@ class TelevisionTunesScraper(ThemeScraper):
                 # Locate download link
                 download_link = page.locator("a[href$='.mp3']").first
                 if download_link.count() == 0:
+                    self._log_debug("No download link found on page")
                     return False
+                
+                self._log_debug("Downloading theme file")
                 
                 # Download file
                 with page.expect_download(timeout=self.TIMEOUT) as download_info:
@@ -87,9 +101,11 @@ class TelevisionTunesScraper(ThemeScraper):
                 
                 # Validate file size
                 if not validate_file_size(output_path):
+                    self._log_debug(f"File too small: {output_path.stat().st_size} bytes")
                     output_path.unlink()
                     return False
                 
+                self._log_debug(f"Download successful: {output_path}")
                 return True
                 
             finally:

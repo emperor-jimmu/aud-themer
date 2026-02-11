@@ -160,26 +160,26 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Test graceful degradation
     - _Requirements: 9.2-9.5_
 
-- [ ] 10. Implement CLI interface
-  - [ ] 10.1 Create main.py with Typer CLI application
+- [x] 10. Implement CLI interface
+  - [x] 10.1 Create main.py with Typer CLI application
     - Define input_dir positional argument with validation
     - Define --force/-f flag
     - Define --verbose/-v flag
     - Define --dry-run flag
     - Add help documentation
     - _Requirements: 11.1-11.6_
-  - [ ] 10.2 Wire CLI to orchestrator
+  - [x] 10.2 Wire CLI to orchestrator
     - Initialize Rich console
     - Create Orchestrator instance with configuration
     - Invoke process_directory method
     - Handle exceptions and exit codes
     - _Requirements: 11.1-11.6_
-  - [ ] 10.3 Implement verbose mode logging
+  - [x] 10.3 Implement verbose mode logging
     - Add debug output for API responses
     - Add debug output for Playwright traces
     - Conditional on --verbose flag
     - _Requirements: 10.6_
-  - [ ]\* 10.4 Write unit tests for CLI
+  - [x] 10.4 Write unit tests for CLI
     - Test argument parsing
     - Test flag handling
     - Test help output

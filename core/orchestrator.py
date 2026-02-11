@@ -63,10 +63,10 @@ class Orchestrator:
         4. YouTube (fallback for everything)
         """
         self.scrapers = [
-            TelevisionTunesScraper(),
-            AnimeThemesScraper(),
-            ThemesMoeScraper(),
-            YoutubeScraper()
+            TelevisionTunesScraper(self.console, self.verbose),
+            AnimeThemesScraper(self.console, self.verbose),
+            ThemesMoeScraper(self.console, self.verbose),
+            YoutubeScraper(self.console, self.verbose)
         ]
     
     def add_scraper(self, scraper: ThemeScraper) -> None:

@@ -29,20 +29,34 @@ class AnimeThemesScraper(ThemeScraper):
             True if download succeeded, False otherwise
         """
         try:
+            self._log_debug(f"Searching AnimeThemes API for: {show_name}")
+            
             # Search for anime
             anime_data = self._search_anime(show_name)
             if not anime_data:
+                self._log_debug("No anime found in API response")
                 return False
+            
+            anime_name = anime_data.get("name", "Unknown")
+            self._log_debug(f"Found anime: {anime_name}")
             
             # Find best theme (prefer OP1)
             video_url = self._find_best_theme(anime_data)
             if not video_url:
+                self._log_debug("No theme video URL found")
                 return False
+            
+            self._log_debug(f"Selected video URL: {video_url}")
             
             # Download video to temp file
             temp_video = output_path.parent / f"temp_{output_path.stem}.webm"
+            self._log_debug(f"Downloading video to: {temp_video}")
+            
             if not self._download_video(video_url, temp_video):
+                self._log_debug("Video download failed")
                 return False
+            
+            self._log_debug("Extracting audio with FFmpeg")
             
             # Extract audio using FFmpeg
             success = self._extract_audio(temp_video, output_path)
@@ -51,9 +65,15 @@ class AnimeThemesScraper(ThemeScraper):
             if temp_video.exists():
                 temp_video.unlink()
             
+            if success:
+                self._log_debug(f"Audio extraction successful: {output_path}")
+            else:
+                self._log_debug("Audio extraction failed")
+            
             return success
             
-        except Exception:
+        except Exception as e:
+            self._log_debug(f"Exception: {str(e)}")
             return False
     
     def _search_anime(self, show_name: str) -> Optional[Dict[str, Any]]:
@@ -93,10 +113,17 @@ class AnimeThemesScraper(ThemeScraper):
                 }
             )
             
+            self._log_debug(f"API response status: {response.status_code}")
+            
             if response.status_code != 200:
                 return None
             
             data = response.json()
+            
+            if self.verbose:
+                anime_count = len(data.get("search", {}).get("anime", []))
+                self._log_debug(f"API returned {anime_count} anime results")
+            
             anime_list = data.get("search", {}).get("anime", [])
             
             if not anime_list:
@@ -233,16 +260,20 @@ class AnimeThemesScraper(ThemeScraper):
             )
             
             if result.returncode != 0:
+                if self.verbose:
+                    self._log_debug(f"FFmpeg stderr: {result.stderr.decode()}")
                 return False
             
             # Validate file size
             if audio_path.stat().st_size < 500_000:
+                self._log_debug(f"File too small: {audio_path.stat().st_size} bytes")
                 audio_path.unlink()
                 return False
             
             return True
             
-        except Exception:
+        except Exception as e:
+            self._log_debug(f"FFmpeg exception: {str(e)}")
             return False
     
     def get_source_name(self) -> str:
