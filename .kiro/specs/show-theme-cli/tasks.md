@@ -70,9 +70,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
   - [x] 4.3 Write unit tests for AnimeThemes scraper
     - Test API request formatting
     - Test JSON response parsing
-    - Test async video download
     - Test FFmpeg audio extraction
-    - Mock httpx async requests and FFmpeg subprocess
     - _Requirements: 4.1-4.7_
 
 - [x] 5. Implement Themes.moe scraper
@@ -208,18 +206,18 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
 - [x] 12. Checkpoint - Integration testing
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ]\* 13. Write integration tests
-  - [ ]\* 13.1 Create end-to-end test with mocked sources
+- [x] 13. Write integration tests
+  - [x] 13.1 Create end-to-end test with mocked sources
     - Test full workflow from CLI to file creation
     - Mock all external dependencies (Playwright, httpx, yt-dlp, FFmpeg)
     - Verify file creation and naming
     - _Requirements: All requirements_
-  - [ ]\* 13.2 Test error scenarios end-to-end
+  - [x] 13.2 Test error scenarios end-to-end
     - Test all sources failing
     - Test network timeouts
     - Test invalid input directory
     - _Requirements: 9.1-9.5_
-  - [ ]\* 13.3 Test CLI output formatting
+  - [x] 13.3 Test CLI output formatting
     - Verify progress display format
     - Verify summary table format
     - Verify colored output
