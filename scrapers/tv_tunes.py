@@ -1,4 +1,4 @@
-"""TelevisionTunes.com scraper implementation."""
+"""TelevisionTunes.co.uk scraper implementation."""
 
 import time
 import random
@@ -9,9 +9,9 @@ from core.utils import validate_file_size, retry_with_backoff
 
 
 class TelevisionTunesScraper(ThemeScraper):
-    """Scraper for TelevisionTunes.com using Playwright web automation."""
+    """Scraper for TelevisionTunes.co.uk using Playwright web automation."""
 
-    BASE_URL = "https://www.televisiontunes.com/"
+    BASE_URL = "https://www.televisiontunes.co.uk/"
     TIMEOUT = 30000  # 30 seconds in milliseconds
 
     def search_and_download(self, show_name: str, output_path: Path) -> bool:
@@ -63,17 +63,19 @@ class TelevisionTunesScraper(ThemeScraper):
                 # Navigate to homepage
                 page.goto(self.BASE_URL, timeout=self.TIMEOUT)
 
-                self._log_debug(f"Searching for: {show_name}")
+                # Strip year from show name for search (e.g., "The Simpsons (1989)" -> "The Simpsons")
+                search_query = show_name.split('(')[0].strip()
+                self._log_debug(f"Searching for: {search_query}")
 
-                # Locate and fill search field
-                search_input = page.locator("#search_field")
-                search_input.fill(show_name)
+                # Locate and fill search field (id="s" on the new site)
+                search_input = page.locator("#s")
+                search_input.fill(search_query)
                 search_input.press("Enter")
 
                 # Wait for results to load
                 page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
-                # Find best matching result
+                # Find best matching result from search results
                 result = self._find_best_match(page, show_name)
                 if not result:
                     self._log_debug("No matching results found")
@@ -85,19 +87,60 @@ class TelevisionTunesScraper(ThemeScraper):
                 result.click()
                 page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
-                # Locate download link
-                download_link = page.locator("a[href$='.mp3']").first
+                # Locate download link (looks for .wav or .mp3 files)
+                download_link = page.locator("a[href*='/themes/']").first
                 if download_link.count() == 0:
                     self._log_debug("No download link found on page")
                     return False
 
-                self._log_debug("Downloading theme file")
+                # Get the download URL
+                download_url = download_link.get_attribute("href")
+                if not download_url:
+                    self._log_debug("Download link has no href attribute")
+                    return False
 
-                # Download file
-                with page.expect_download(timeout=self.TIMEOUT) as download_info:
-                    download_link.click()
-                download = download_info.value
-                download.save_as(str(output_path))
+                self._log_debug(f"Downloading theme file from: {download_url}")
+
+                # Download file using page.request instead of clicking
+                response = page.request.get(download_url)
+                if response.status != 200:
+                    self._log_debug(f"Download failed with status: {response.status}")
+                    return False
+
+                # Save the file
+                with open(output_path, "wb") as f:
+                    f.write(response.body())
+
+                # Convert WAV to MP3 if needed
+                if download_url.endswith('.wav'):
+                    self._log_debug("Converting WAV to MP3")
+                    temp_wav = output_path.with_suffix('.wav')
+                    output_path.rename(temp_wav)
+                    
+                    import subprocess
+                    result = subprocess.run(
+                        [
+                            "ffmpeg",
+                            "-i", str(temp_wav),
+                            "-vn",  # No video
+                            "-acodec", "libmp3lame",
+                            "-b:a", "320k",
+                            "-y",  # Overwrite
+                            str(output_path)
+                        ],
+                        capture_output=True,
+                        timeout=60
+                    )
+                    
+                    # Clean up temp file
+                    if temp_wav.exists():
+                        temp_wav.unlink()
+                    
+                    if result.returncode != 0:
+                        self._log_debug(f"FFmpeg conversion failed: {result.stderr.decode()}")
+                        if output_path.exists():
+                            output_path.unlink()
+                        return False
 
                 # Validate file size
                 if not validate_file_size(output_path):
@@ -115,27 +158,41 @@ class TelevisionTunesScraper(ThemeScraper):
 
     def _find_best_match(self, page: Page, show_name: str):
         """
-        Find best matching result using exact match or first result.
+        Find best matching result from search results list.
 
         Args:
             page: Playwright page object with search results
             show_name: Name of the show to match
 
         Returns:
-            Locator for the best matching result, or None if no results
+            Locator for the best matching result link, or None if no results
         """
-        results = page.locator(".result-item")
+        # Look for list items in the categorylist (search results)
+        results = page.locator("ul.categorylist li a")
         count = results.count()
 
         if count == 0:
             return None
 
-        # Try exact match first
+        # Try exact match first (ignoring year in parentheses)
         show_name_lower = show_name.lower()
+        # Remove year from search if present (e.g., "The Simpsons (1989)" -> "the simpsons")
+        show_name_clean = show_name_lower.split('(')[0].strip()
+        
         for i in range(count):
             result = results.nth(i)
             text = result.text_content()
-            if text and show_name_lower in text.lower():
+            if text:
+                text_clean = text.lower().strip()
+                # Exact match
+                if show_name_clean == text_clean:
+                    return result
+
+        # Try partial match
+        for i in range(count):
+            result = results.nth(i)
+            text = result.text_content()
+            if text and show_name_clean in text.lower():
                 return result
 
         # Fall back to first result

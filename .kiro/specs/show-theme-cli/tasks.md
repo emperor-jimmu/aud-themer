@@ -38,7 +38,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
 
 - [x] 3. Implement TelevisionTunes scraper
   - [x] 3.1 Create scrapers/tv_tunes.py with TelevisionTunesScraper class
-    - Implement Playwright-based navigation to televisiontunes.com
+    - Implement Playwright-based navigation to televisiontunes.co.uk
     - Implement search functionality
     - Implement result matching logic (exact match or first result)
     - Implement download functionality

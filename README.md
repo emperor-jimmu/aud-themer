@@ -131,7 +131,7 @@ TV_Shows/
 
 The tool tries sources in this priority order:
 
-1. **TelevisionTunes** (televisiontunes.com)
+1. **TelevisionTunes** (televisiontunes.co.uk)
    - Best for TV shows
    - High-quality official themes
    - Web scraping via Playwright

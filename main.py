@@ -51,7 +51,7 @@ def main(
     The tool will scan each subdirectory in INPUT_DIR, identify the show name,
     and attempt to download theme songs from multiple sources in priority order:
 
-    1. TelevisionTunes.com (best for TV shows)
+    1. TelevisionTunes.co.uk (best for TV shows)
     2. AnimeThemes.moe (best for anime)
     3. Themes.moe (additional anime source)
     4. YouTube (fallback for everything)

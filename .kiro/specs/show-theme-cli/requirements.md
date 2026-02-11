@@ -44,11 +44,11 @@ The Show Theme CLI is a command-line tool that automates the retrieval of theme 
 
 ### Requirement 3: TelevisionTunes Source Integration
 
-**User Story:** As a user, I want the tool to search TelevisionTunes.com first, so that I can get high-quality TV show themes from a dedicated source.
+**User Story:** As a user, I want the tool to search TelevisionTunes.co.uk first, so that I can get high-quality TV show themes from a dedicated source.
 
 #### Acceptance Criteria
 
-1. WHEN searching for a show theme, THE Scraper SHALL navigate to https://www.televisiontunes.com/ using Web_Automation
+1. WHEN searching for a show theme, THE Scraper SHALL navigate to https://www.televisiontunes.co.uk/ using Web_Automation
 2. WHEN the search page loads, THE Scraper SHALL locate the search input field and enter the show name
 3. WHEN search results are returned, THE Scraper SHALL identify the most relevant result using exact match or first result heuristics
 4. WHEN a matching result is found, THE Scraper SHALL navigate to the song page and locate the download link
