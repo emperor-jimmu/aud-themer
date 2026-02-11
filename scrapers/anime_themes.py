@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 import httpx
 
 from scrapers.base import ThemeScraper
+from core.utils import retry_with_backoff
 
 
 class AnimeThemesScraper(ThemeScraper):
@@ -58,6 +59,24 @@ class AnimeThemesScraper(ThemeScraper):
     def _search_anime(self, show_name: str) -> Optional[Dict[str, Any]]:
         """
         Search AnimeThemes API for matching anime.
+        
+        Args:
+            show_name: Name of the anime to search for
+            
+        Returns:
+            Anime data dictionary if found, None otherwise
+        """
+        return self._search_anime_with_retry(show_name)
+    
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=0.0,
+        backoff_factor=2.0,
+        exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
+    )
+    def _search_anime_with_retry(self, show_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Internal method with retry logic for network timeouts.
         
         Args:
             show_name: Name of the anime to search for
@@ -147,6 +166,25 @@ class AnimeThemesScraper(ThemeScraper):
     def _download_video(self, url: str, output_path: Path) -> bool:
         """
         Download video file from URL.
+        
+        Args:
+            url: Video URL to download
+            output_path: Path where video should be saved
+            
+        Returns:
+            True if download succeeded, False otherwise
+        """
+        return self._download_video_with_retry(url, output_path)
+    
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=0.0,
+        backoff_factor=2.0,
+        exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
+    )
+    def _download_video_with_retry(self, url: str, output_path: Path) -> bool:
+        """
+        Internal method with retry logic for network timeouts.
         
         Args:
             url: Video URL to download

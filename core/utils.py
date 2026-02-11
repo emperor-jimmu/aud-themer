@@ -1,8 +1,11 @@
 """Utility functions for file system operations and validation."""
 
 import re
+import time
 from pathlib import Path
 from difflib import SequenceMatcher
+from functools import wraps
+from typing import Callable, Any
 
 
 def validate_path(path: Path) -> bool:
@@ -82,3 +85,56 @@ def calculate_name_similarity(name1: str, name2: str) -> float:
         Similarity ratio between 0.0 (no match) and 1.0 (exact match)
     """
     return SequenceMatcher(None, name1.lower(), name2.lower()).ratio()
+
+
+def retry_with_backoff(
+    max_attempts: int = 3,
+    initial_delay: float = 0.0,
+    backoff_factor: float = 2.0,
+    exceptions: tuple = (Exception,)
+) -> Callable:
+    """
+    Decorator to retry a function with exponential backoff.
+    
+    Args:
+        max_attempts: Maximum number of retry attempts (default: 3)
+        initial_delay: Initial delay in seconds before first retry (default: 0)
+        backoff_factor: Multiplier for delay between retries (default: 2.0)
+        exceptions: Tuple of exception types to catch and retry (default: all exceptions)
+        
+    Returns:
+        Decorated function with retry logic
+        
+    Example:
+        @retry_with_backoff(max_attempts=3, initial_delay=0, backoff_factor=2)
+        def network_operation():
+            # This will retry up to 3 times with delays: 0s, 2s, 4s
+            pass
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    
+                    # If this was the last attempt, raise the exception
+                    if attempt == max_attempts - 1:
+                        raise
+                    
+                    # Wait before retrying (skip delay on first attempt if initial_delay is 0)
+                    if delay > 0 or attempt > 0:
+                        time.sleep(delay if attempt == 0 else delay * (backoff_factor ** attempt))
+            
+            # This should never be reached, but just in case
+            if last_exception:
+                raise last_exception
+            return None
+        
+        return wrapper
+    return decorator

@@ -6,7 +6,7 @@ import random
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from scrapers.base import ThemeScraper
-from core.utils import validate_file_size
+from core.utils import validate_file_size, retry_with_backoff
 
 
 class ThemesMoeScraper(ThemeScraper):
@@ -18,6 +18,30 @@ class ThemesMoeScraper(ThemeScraper):
     def search_and_download(self, show_name: str, output_path: Path) -> bool:
         """
         Search for and download a theme song from Themes.moe.
+        
+        Args:
+            show_name: Name of the anime
+            output_path: Full path where theme file should be saved
+            
+        Returns:
+            True if download succeeded, False otherwise
+        """
+        try:
+            return self._search_and_download_with_retry(show_name, output_path)
+        except PlaywrightTimeoutError:
+            return False
+        except Exception:
+            return False
+    
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=0.0,
+        backoff_factor=2.0,
+        exceptions=(PlaywrightTimeoutError,)
+    )
+    def _search_and_download_with_retry(self, show_name: str, output_path: Path) -> bool:
+        """
+        Internal method with retry logic for network timeouts.
         
         Args:
             show_name: Name of the anime
@@ -94,10 +118,6 @@ class ThemesMoeScraper(ThemeScraper):
                 
                 return True
                 
-            except PlaywrightTimeoutError:
-                return False
-            except Exception:
-                return False
             finally:
                 browser.close()
                 # Rate limiting delay

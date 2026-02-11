@@ -1,5 +1,6 @@
 """Orchestration logic for theme song retrieval."""
 
+import sys
 from pathlib import Path
 from typing import List, Optional
 from rich.console import Console
@@ -9,6 +10,11 @@ from scrapers.tv_tunes import TelevisionTunesScraper
 from scrapers.anime_themes import AnimeThemesScraper
 from scrapers.themes_moe import ThemesMoeScraper
 from scrapers.youtube import YoutubeScraper
+
+
+class CriticalError(Exception):
+    """Exception raised for critical errors that should stop execution."""
+    pass
 
 
 class Orchestrator:
@@ -78,7 +84,17 @@ class Orchestrator:
         
         Args:
             input_dir: Root directory containing series folders
+            
+        Raises:
+            CriticalError: If a critical error occurs that should stop execution
         """
+        # Validate input directory
+        if not input_dir.exists():
+            raise CriticalError(f"Input directory does not exist: {input_dir}")
+        
+        if not input_dir.is_dir():
+            raise CriticalError(f"Input path is not a directory: {input_dir}")
+        
         series_folders = self._scan_directory(input_dir)
         
         if not series_folders:
@@ -90,7 +106,20 @@ class Orchestrator:
         
         for index, folder in enumerate(series_folders, start=1):
             self.console.print(f"\n[bold cyan]Folder {index}/{total_folders}[/bold cyan]")
-            self.process_show(folder)
+            try:
+                self.process_show(folder)
+            except CriticalError:
+                # Re-raise critical errors to stop execution
+                raise
+            except Exception as e:
+                # Log non-critical errors and continue processing
+                self.console.print(
+                    f"[red]ERROR[/] Unexpected error processing {folder.name}: {str(e)}"
+                )
+                if self.verbose:
+                    import traceback
+                    self.console.print(traceback.format_exc())
+                self.results["failed"] += 1
         
         self.display_summary()
     
@@ -113,6 +142,10 @@ class Orchestrator:
         except PermissionError:
             self.console.print(
                 f"[yellow]Warning: Permission denied accessing {input_dir}[/]"
+            )
+        except OSError as e:
+            self.console.print(
+                f"[yellow]Warning: Error accessing {input_dir}: {str(e)}[/]"
             )
         
         return series_folders
@@ -153,9 +186,30 @@ class Orchestrator:
         
         Args:
             folder: Path to series folder
+            
+        Raises:
+            CriticalError: If a critical error occurs that should stop execution
         """
         show_name = self._extract_show_name(folder)
         theme_file = folder / "theme.mp3"
+        
+        # Check for permission errors accessing the folder
+        try:
+            # Test if we can access the folder
+            folder.exists()
+            list(folder.iterdir())
+        except PermissionError:
+            self.console.print(
+                f"[yellow]SKIPPED[/] {show_name} - Permission denied"
+            )
+            self.results["skipped"] += 1
+            return
+        except OSError as e:
+            self.console.print(
+                f"[yellow]SKIPPED[/] {show_name} - Cannot access folder: {str(e)}"
+            )
+            self.results["skipped"] += 1
+            return
         
         # Check if theme already exists
         existing_theme = self._find_existing_theme(folder)
@@ -187,6 +241,23 @@ class Orchestrator:
                     return
                 else:
                     self.console.print(f" [red]✗[/]")
+            except OSError as e:
+                # Handle disk space and permission errors during download
+                self.console.print(f" [red]✗[/]")
+                if "No space left on device" in str(e) or "Disk quota exceeded" in str(e):
+                    self.console.print(
+                        f"[red]ERROR[/] Disk space error: {str(e)}"
+                    )
+                    self.results["failed"] += 1
+                    return
+                elif "Permission denied" in str(e):
+                    self.console.print(
+                        f"[yellow]Warning: Permission denied writing to {folder}[/]"
+                    )
+                    # Continue to next scraper
+                else:
+                    if self.verbose:
+                        self.console.print(f"    OS Error: {str(e)}")
             except Exception as e:
                 self.console.print(f" [red]✗[/]")
                 if self.verbose:

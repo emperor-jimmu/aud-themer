@@ -139,21 +139,21 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Display at end of processing
     - _Requirements: 10.5_
 
-- [ ] 9. Implement error handling and retry logic
-  - [ ] 9.1 Add retry logic with exponential backoff to scrapers
+- [x] 9. Implement error handling and retry logic
+  - [x] 9.1 Add retry logic with exponential backoff to scrapers
     - Implement 3-attempt retry for network timeouts
     - Implement exponential backoff (0s, 2s, 4s)
     - _Requirements: 9.1_
-  - [ ]\* 9.2 Write property test for retry logic
+  - [x] 9.2 Write property test for retry logic
     - **Property 16: Retry with Exponential Backoff**
     - **Validates: Requirements 9.1**
-  - [ ] 9.3 Add error handling to orchestrator
+  - [x] 9.3 Add error handling to orchestrator
     - Handle permission errors (skip folder with warning)
     - Handle disk space errors (log and mark failed)
     - Handle critical errors (exit with error code 1)
     - Ensure single show failure doesn't stop processing
     - _Requirements: 9.2-9.5_
-  - [ ]\* 9.4 Write unit tests for error handling
+  - [x] 9.4 Write unit tests for error handling
     - Test permission error handling
     - Test disk space error handling
     - Test critical error handling
