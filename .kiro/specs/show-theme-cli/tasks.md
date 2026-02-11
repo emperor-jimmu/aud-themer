@@ -90,14 +90,14 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Use Playwright mocking
     - _Requirements: 5.1-5.6_
 
-- [ ] 6. Implement YouTube fallback scraper
-  - [ ] 6.1 Create scrapers/youtube.py with YoutubeScraper class
+- [x] 6. Implement YouTube fallback scraper
+  - [x] 6.1 Create scrapers/youtube.py with YoutubeScraper class
     - Implement yt-dlp integration
     - Configure search query format
     - Configure audio extraction options (192kbps minimum)
     - Configure single video download (no playlists)
     - _Requirements: 6.1-6.5_
-  - [ ]\* 6.2 Write unit tests for YouTube scraper
+  - [x] 6.2 Write unit tests for YouTube scraper
     - Test yt-dlp configuration
     - Test query formatting
     - Test audio extraction
