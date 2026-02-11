@@ -5,7 +5,8 @@ A command-line tool that automates theme song retrieval for TV shows and anime s
 ## Features
 
 - **Automatic theme discovery**: Scans directories and downloads theme songs automatically
-- **Multiple sources**: Tries TelevisionTunes → AnimeThemes → Themes.moe → YouTube in priority order
+- **Content mode selection**: Choose TV, Anime, or Both modes for optimized source usage
+- **Multiple sources**: Tries sources in priority order based on content type
 - **Smart fallback**: Automatically tries next source if one fails
 - **Skip existing themes**: Won't re-download unless you use `--force`
 - **Rich console output**: Beautiful progress tracking with colored status indicators
@@ -47,10 +48,17 @@ ffmpeg -version
 ### Basic Usage
 
 ```bash
-python main.py /path/to/tv_shows
+# Process both TV shows and anime (default)
+python main.py /path/to/shows
+
+# Process TV shows only
+python main.py /path/to/tv_shows --mode tv
+
+# Process anime only
+python main.py /path/to/anime --mode anime
 ```
 
-This will scan `/path/to/tv_shows` for subdirectories (each representing a show) and download theme songs to each folder as `theme.mp3`.
+This will scan the directory for subdirectories (each representing a show) and download theme songs to each folder as `theme.mp3`.
 
 ### Command-Line Options
 
@@ -64,17 +72,32 @@ python main.py [OPTIONS] INPUT_DIR
 
 **Options:**
 
+- `--mode`, `-m`: Content type - tv, anime, or both (default: both)
 - `--force`, `-f`: Overwrite existing theme files (default: False)
 - `--verbose`, `-v`: Enable debug logging (default: False)
 - `--dry-run`: Simulate operations without downloading (default: False)
+- `--timeout`, `-t`: Network timeout in seconds (default: 30)
+- `--version`: Show version and exit
 - `--help`: Show help message and exit
 
 ### Examples
 
-**Download themes for all shows:**
+**Download themes for all shows (both TV and anime):**
 
 ```bash
-python main.py ~/Media/TV_Shows
+python main.py ~/Media/Shows
+```
+
+**Download themes for TV shows only:**
+
+```bash
+python main.py ~/Media/TV_Shows --mode tv
+```
+
+**Download themes for anime only:**
+
+```bash
+python main.py ~/Media/Anime --mode anime
 ```
 
 **Force re-download existing themes:**
@@ -98,7 +121,7 @@ python main.py ~/Media/TV_Shows --verbose
 **Combine options:**
 
 ```bash
-python main.py ~/Media/TV_Shows --force --verbose
+python main.py ~/Media/Anime --mode anime --force --verbose
 ```
 
 ## Directory Structure
@@ -113,44 +136,65 @@ TV_Shows/
 └── Cowboy Bebop/
 ```
 
-After running, theme files will be added:
+After running, theme files will be added in a `theme-music` subfolder:
 
 ```
 TV_Shows/
 ├── Breaking Bad/
-│   └── theme.mp3
+│   └── theme-music/
+│       └── theme.mp3
 ├── The Office/
-│   └── theme.mp3
+│   └── theme-music/
+│       └── theme.mp3
 ├── Attack on Titan/
-│   └── theme.mp3
+│   └── theme-music/
+│       └── theme.mp3
 └── Cowboy Bebop/
-│   └── theme.mp3
+    └── theme-music/
+        └── theme.mp3
 ```
 
 ## Supported Sources
 
-The tool tries sources in this priority order:
+The tool tries sources in priority order based on the selected mode:
+
+### TV Mode (`--mode tv`)
 
 1. **TelevisionTunes** (televisiontunes.co.uk)
    - Best for TV shows
    - High-quality official themes
    - Web scraping via Playwright
 
-2. **AnimeThemes** (animethemes.moe)
+2. **YouTube** (youtube.com)
+   - Fallback for any show
+   - Searches for "{Show Name} full theme song"
+   - Uses yt-dlp for downloads
+   - Minimum 192kbps audio quality
+
+### Anime Mode (`--mode anime`)
+
+1. **AnimeThemes** (animethemes.moe)
    - Best for anime
    - Official opening/ending themes
    - REST API with video downloads
    - Prefers OP1 > OP > ED
 
-3. **Themes.moe** (themes.moe)
+2. **Themes.moe** (themes.moe)
    - Additional anime source
    - Web scraping via Playwright
 
-4. **YouTube** (youtube.com)
+3. **YouTube** (youtube.com)
    - Fallback for any show
    - Searches for "{Show Name} full theme song"
    - Uses yt-dlp for downloads
    - Minimum 192kbps audio quality
+
+### Both Mode (`--mode both`, default)
+
+1. **TelevisionTunes** (televisiontunes.co.uk)
+2. **AnimeThemes** (animethemes.moe)
+3. **Themes.moe** (themes.moe)
+4. **YouTube** (youtube.com)
 
 ## Output
 

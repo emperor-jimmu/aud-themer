@@ -1,6 +1,7 @@
 """Orchestration logic for theme song retrieval."""
 
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional
 from rich.console import Console
@@ -16,6 +17,13 @@ from core.logging_utils import StructuredLogger
 from core.utils import get_file_size_formatted, get_audio_duration
 
 
+class ContentMode(Enum):
+    """Content type mode for source selection."""
+    TV = "tv"
+    ANIME = "anime"
+    BOTH = "both"
+
+
 class CriticalError(Exception):
     """Exception raised for critical errors that should stop execution."""
 
@@ -29,7 +37,8 @@ class Orchestrator:
         force: bool = False,
         dry_run: bool = False,
         verbose: bool = False,
-        timeout: int = Config.DEFAULT_TIMEOUT_SEC
+        timeout: int = Config.DEFAULT_TIMEOUT_SEC,
+        mode: ContentMode = ContentMode.BOTH
     ):
         """
         Initialize the orchestrator.
@@ -40,12 +49,14 @@ class Orchestrator:
             dry_run: If True, simulate operations without downloading
             verbose: If True, enable debug logging
             timeout: Network timeout in seconds
+            mode: Content type mode (TV, ANIME, or BOTH)
         """
         self.console = console
         self.force = force
         self.dry_run = dry_run
         self.verbose = verbose
         self.timeout = timeout
+        self.mode = mode
         self.scrapers: List[ThemeScraper] = []
         self.logger = logging.getLogger(__name__)
         self.structured_logger = StructuredLogger(__name__)
@@ -56,8 +67,49 @@ class Orchestrator:
             "failed": 0
         }
 
-        # Initialize scrapers in priority order
-        self._initialize_default_scrapers()
+        # Initialize scrapers based on mode
+        self._initialize_scrapers_by_mode()
+
+    def _initialize_scrapers_by_mode(self) -> None:
+        """
+        Initialize scrapers based on content mode.
+
+        TV Mode:
+        1. TelevisionTunes
+        2. YouTube
+
+        Anime Mode:
+        1. AnimeThemes
+        2. Themes.moe
+        3. YouTube
+
+        Both Mode:
+        1. TelevisionTunes
+        2. AnimeThemes
+        3. Themes.moe
+        4. YouTube
+        """
+        if self.mode == ContentMode.TV:
+            self.scrapers = [
+                TelevisionTunesScraper(self.console, self.verbose, self.timeout),
+                YoutubeScraper(self.console, self.verbose)
+            ]
+            self.logger.info("Initialized scrapers for TV mode: TelevisionTunes, YouTube")
+        elif self.mode == ContentMode.ANIME:
+            self.scrapers = [
+                AnimeThemesScraper(self.console, self.verbose, self.timeout),
+                ThemesMoeScraper(self.console, self.verbose, self.timeout),
+                YoutubeScraper(self.console, self.verbose)
+            ]
+            self.logger.info("Initialized scrapers for Anime mode: AnimeThemes, Themes.moe, YouTube")
+        else:  # ContentMode.BOTH
+            self.scrapers = [
+                TelevisionTunesScraper(self.console, self.verbose, self.timeout),
+                AnimeThemesScraper(self.console, self.verbose, self.timeout),
+                ThemesMoeScraper(self.console, self.verbose, self.timeout),
+                YoutubeScraper(self.console, self.verbose)
+            ]
+            self.logger.info("Initialized scrapers for Both mode: All sources")
 
     def _initialize_default_scrapers(self) -> None:
         """
@@ -185,7 +237,7 @@ class Orchestrator:
 
     def _find_existing_theme(self, folder: Path) -> Optional[Path]:
         """
-        Check if a theme file already exists in the folder.
+        Check if a theme file already exists in the theme-music subfolder.
 
         Checks for theme files with extensions from Config.THEME_EXTENSIONS
 
@@ -195,8 +247,12 @@ class Orchestrator:
         Returns:
             Path to existing theme file, or None if not found
         """
+        theme_folder = folder / Config.THEME_FOLDER_NAME
+        if not theme_folder.exists():
+            return None
+            
         for ext in Config.THEME_EXTENSIONS:
-            theme_file = folder / f"theme{ext}"
+            theme_file = theme_folder / f"theme{ext}"
             if theme_file.exists():
                 return theme_file
         return None
@@ -213,7 +269,10 @@ class Orchestrator:
             CriticalError: If a critical error occurs that should stop execution
         """
         show_name = self._extract_show_name(folder)
-        theme_file = folder / "theme.mp3"
+        
+        # Create theme-music subfolder path
+        theme_folder = folder / Config.THEME_FOLDER_NAME
+        theme_file = theme_folder / "theme.mp3"
 
         # Check for permission errors accessing the folder
         try:
@@ -245,6 +304,17 @@ class Orchestrator:
         if self.dry_run:
             self.console.print(f"[bright_blue]⚡ DRY RUN[/bright_blue] Would process: {show_name}")
             self.logger.info(f"Dry run - would process '{show_name}'")
+            return
+
+        # Create theme-music subfolder if it doesn't exist
+        try:
+            theme_folder.mkdir(exist_ok=True)
+        except OSError as exc:
+            self.console.print(
+                f"[red]ERROR[/] Could not create theme-music folder: {str(exc)}"
+            )
+            self.logger.error(f"Failed to create theme folder for '{show_name}': {str(exc)}")
+            self.results["failed"] += 1
             return
 
         # If force mode is enabled and a theme exists, delete it before downloading
