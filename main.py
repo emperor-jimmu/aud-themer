@@ -142,13 +142,22 @@ def main(
     # Set logging level based on verbose flag
     log_level = logging.DEBUG if verbose else logging.INFO
     
+    # Configure handlers with UTF-8 encoding
+    handlers = [logging.FileHandler(log_file, encoding='utf-8')]
+    if verbose:
+        # Use UTF-8 encoding for console output to handle Unicode characters
+        import io
+        stream_handler = logging.StreamHandler(
+            io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+        )
+        handlers.append(stream_handler)
+    else:
+        handlers.append(logging.NullHandler())
+    
     logging.basicConfig(
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler() if verbose else logging.NullHandler()
-        ]
+        handlers=handlers
     )
     logger = logging.getLogger(__name__)
     
