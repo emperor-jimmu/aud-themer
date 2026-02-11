@@ -109,7 +109,7 @@ class AnimeThemesScraper(ThemeScraper):
                 f"{self.BASE_URL}/search",
                 params={
                     "q": show_name,
-                    "include": "animethemes.animethemeentries.videos"
+                    "include[anime]": "animethemes.animethemeentries.videos"
                 }
             )
 

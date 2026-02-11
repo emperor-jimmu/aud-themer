@@ -64,29 +64,49 @@ class ThemesMoeScraper(ThemeScraper):
                 # Navigate to homepage
                 page.goto(self.BASE_URL, timeout=self.TIMEOUT)
 
-                # Check if search functionality exists
-                search_input = page.locator("input[type='search'], input[placeholder*='search' i]")
-                if search_input.count() == 0:
-                    self._log_debug("No search functionality found on page")
+                # Click the dropdown button to select "Anime Search" mode
+                dropdown_button = page.locator("button:has-text('MyAnimeList'), button:has-text('Anime Search')")
+                if dropdown_button.count() == 0:
+                    self._log_debug("No search dropdown found on page")
                     return False
 
+                # If button shows "MyAnimeList", click to open dropdown
+                if "MyAnimeList" in dropdown_button.first.text_content():
+                    dropdown_button.first.click()
+                    page.wait_for_timeout(500)  # Wait for dropdown to appear
+
+                    # Click "Anime Search" option
+                    anime_search_option = page.locator("text='Anime Search'")
+                    if anime_search_option.count() == 0:
+                        self._log_debug("Anime Search option not found in dropdown")
+                        return False
+                    anime_search_option.click()
+                    page.wait_for_timeout(500)
+
                 self._log_debug(f"Searching for: {show_name}")
+
+                # Find and fill the search combobox
+                search_input = page.locator("role=combobox")
+                if search_input.count() == 0:
+                    self._log_debug("No search combobox found on page")
+                    return False
 
                 # Perform search
                 search_input.first.fill(show_name)
                 search_input.first.press("Enter")
                 page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
-                # Find audio/video element
-                media_locator = page.locator("audio source, video source")
-                if media_locator.count() == 0:
-                    self._log_debug("No audio/video elements found")
+                # Find the first OP (opening) link in the results table
+                # Look for links with text "OP1" or "OP" in the table
+                op_link = page.locator("table a:has-text('OP1'), table a:has-text('OP')")
+                if op_link.count() == 0:
+                    self._log_debug("No opening theme found in search results")
                     return False
 
-                media = media_locator.first
-                media_url = media.get_attribute("src")
+                # Get the media URL from the first OP link
+                media_url = op_link.first.get_attribute("href")
                 if not media_url:
-                    self._log_debug("No media URL found")
+                    self._log_debug("No media URL found in OP link")
                     return False
 
                 self._log_debug(f"Found media URL: {media_url}")
