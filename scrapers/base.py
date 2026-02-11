@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
+import logging
 from rich.console import Console
 
 
@@ -19,6 +20,7 @@ class ThemeScraper(ABC):
         """
         self.console = console
         self.verbose = verbose
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def _log_debug(self, message: str) -> None:
         """
@@ -29,6 +31,16 @@ class ThemeScraper(ABC):
         """
         if self.verbose and self.console:
             self.console.print(f"    [dim]{message}[/dim]")
+
+    def _log_error(self, message: str, exc_info: bool = False) -> None:
+        """
+        Log an error message to the error log file.
+
+        Args:
+            message: Error message to log
+            exc_info: If True, include exception traceback
+        """
+        self.logger.error(message, exc_info=exc_info)
 
     @abstractmethod
     def search_and_download(self, show_name: str, output_path: Path) -> bool:

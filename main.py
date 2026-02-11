@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import sys
+import logging
+from datetime import datetime
 import typer
 from rich.console import Console
 from core.orchestrator import Orchestrator, CriticalError
@@ -73,6 +75,20 @@ def main(
     """
     console.print("[bold blue]Show Theme CLI[/bold blue]\n")
 
+    # Setup error logging to file
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = Path(f"errors-{timestamp}.log")
+    
+    logging.basicConfig(
+        level=logging.ERROR,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler() if verbose else logging.NullHandler()
+        ]
+    )
+    logger = logging.getLogger(__name__)
+
     # Validate dependencies before processing
     validate_dependencies(console)
 
@@ -80,17 +96,23 @@ def main(
         orchestrator = Orchestrator(console, force, dry_run, verbose)
         orchestrator.process_directory(input_dir)
     except CriticalError as e:
+        logger.error(f"Critical error: {str(e)}", exc_info=True)
         console.print(f"[red]CRITICAL ERROR:[/] {str(e)}")
         sys.exit(1)
     except KeyboardInterrupt:
         console.print("\n[yellow]Operation cancelled by user[/]")
         sys.exit(130)
     except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         console.print(f"[red]UNEXPECTED ERROR:[/] {str(e)}")
         if verbose:
             import traceback
             console.print(traceback.format_exc())
         sys.exit(1)
+    finally:
+        # Only show log file message if errors were logged
+        if log_file.exists() and log_file.stat().st_size > 0:
+            console.print(f"\n[dim]Error log saved to: {log_file}[/dim]")
 
 
 if __name__ == "__main__":

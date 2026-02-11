@@ -32,8 +32,10 @@ class ThemesMoeScraper(ThemeScraper):
             clean_name = re.sub(r'\s*\(\d{4}\)\s*$', '', show_name).strip()
             return self._search_and_download_with_retry(clean_name, output_path)
         except PlaywrightTimeoutError:
+            self._log_error("Playwright timeout error", exc_info=True)
             return False
-        except Exception:
+        except Exception as e:
+            self._log_error(f"Exception in search_and_download: {str(e)}", exc_info=True)
             return False
 
     @retry_with_backoff(

@@ -1,6 +1,7 @@
 """Orchestration logic for theme song retrieval."""
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import List, Optional
 from rich.console import Console
@@ -46,6 +47,7 @@ class Orchestrator:
         self.verbose = verbose
         self.max_concurrent = max_concurrent
         self.scrapers: List[ThemeScraper] = []
+        self.logger = logging.getLogger(__name__)
         self.results = {
             "success": 0,
             "skipped": 0,
@@ -134,6 +136,10 @@ class Orchestrator:
                     raise
                 except Exception as e:
                     # Log non-critical errors and continue processing
+                    self.logger.error(
+                        f"Unexpected error processing {folder.name}: {str(e)}",
+                        exc_info=True
+                    )
                     self.console.print(
                         f"[red]ERROR[/] Unexpected error processing {folder.name}: {str(e)}"
                     )
@@ -287,20 +293,28 @@ class Orchestrator:
                 # Handle disk space and permission errors during download
                 self.console.print(f" [red]✗[/]")
                 if "No space left on device" in str(e) or "Disk quota exceeded" in str(e):
+                    self.logger.error(f"Disk space error for {show_name}: {str(e)}", exc_info=True)
                     self.console.print(
                         f"[red]ERROR[/] Disk space error: {str(e)}"
                     )
                     self.results["failed"] += 1
                     return
                 elif "Permission denied" in str(e):
+                    self.logger.warning(f"Permission denied for {show_name}: {str(e)}")
                     self.console.print(
                         f"[yellow]Warning: Permission denied writing to {folder}[/]"
                     )
                     # Continue to next scraper
                 else:
+                    self.logger.error(f"OS error for {show_name}: {str(e)}", exc_info=True)
                     if self.verbose:
                         self.console.print(f"    OS Error: {str(e)}")
             except Exception as e:
+                self.logger.error(
+                    f"Unexpected exception in scraper {scraper.get_source_name()} "
+                    f"for {show_name}: {str(e)}",
+                    exc_info=True
+                )
                 self.console.print(f" [red]✗[/]")
                 if self.verbose:
                     self.console.print(f"    Error: {str(e)}")

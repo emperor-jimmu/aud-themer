@@ -77,6 +77,7 @@ class AnimeThemesScraper(ThemeScraper):
             return success
 
         except Exception as e:
+            self._log_error(f"Exception in search_and_download: {str(e)}", exc_info=True)
             self._log_debug(f"Exception: {str(e)}")
             return False
 
