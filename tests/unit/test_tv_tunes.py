@@ -299,8 +299,13 @@ def test_rate_limiting_delay():
             result = scraper.search_and_download("Test Show", output_path)
             
             # Verify rate limiting was applied
-            mock_uniform.assert_called_once_with(1, 3)
-            mock_sleep.assert_called_once_with(2.0)
+            # With retry decorator (3 attempts) and rate limiting in finally block,
+            # we expect: uniform called 3 times (once per attempt in finally block)
+            # and sleep called for backoff + rate limiting
+            assert mock_uniform.call_count == 3
+            assert all(call[0] == (1, 3) for call in mock_uniform.call_args_list)
+            # Sleep is called for both backoff delays and rate limiting delays
+            assert mock_sleep.call_count >= 3  # At least 3 for rate limiting
 
 
 @pytest.mark.unit

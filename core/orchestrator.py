@@ -223,6 +223,17 @@ class Orchestrator:
             self.console.print(f"[blue]DRY RUN[/] Would process: {show_name}")
             return
         
+        # If force mode is enabled and a theme exists, delete it before downloading
+        if self.force and existing_theme:
+            try:
+                existing_theme.unlink()
+                if self.verbose:
+                    self.console.print(f"  Deleted existing theme: {existing_theme.name}")
+            except OSError as e:
+                self.console.print(
+                    f"[yellow]Warning: Could not delete existing theme: {str(e)}[/]"
+                )
+        
         # Try each scraper in order
         self.console.print(f"\n[bold]Processing:[/] {show_name}")
         

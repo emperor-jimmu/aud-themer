@@ -5,10 +5,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Mock yt_dlp before importing the scraper
-import sys
-sys.modules['yt_dlp'] = MagicMock()
-
 from scrapers.youtube import YoutubeScraper
 
 
@@ -24,7 +20,7 @@ def test_successful_youtube_search_and_download():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -64,7 +60,7 @@ def test_ytdlp_configuration():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -113,7 +109,7 @@ def test_query_formatting():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -145,7 +141,7 @@ def test_audio_extraction_bitrate():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -177,7 +173,7 @@ def test_single_video_download_no_playlists():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -212,7 +208,7 @@ def test_handling_download_failure():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -239,7 +235,7 @@ def test_handling_ytdlp_exception():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             # Raise an exception
             mock_ytdl_class.side_effect = Exception("Network error")
             
@@ -263,7 +259,7 @@ def test_file_size_validation():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -325,7 +321,7 @@ def test_output_template_configuration():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -369,7 +365,7 @@ def test_mp3_format_conversion():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             
@@ -403,7 +399,7 @@ def test_file_rename_handling():
         output_path = Path(tmp_dir) / "theme.mp3"
         alternate_path = output_path.with_suffix('.mp3')
         
-        with patch('yt_dlp.YoutubeDL') as mock_ytdl_class:
+        with patch('scrapers.youtube.yt_dlp.YoutubeDL') as mock_ytdl_class:
             mock_ytdl = MagicMock()
             mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
             

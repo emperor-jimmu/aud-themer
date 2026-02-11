@@ -187,24 +187,24 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Use Typer's CliRunner
     - _Requirements: 11.1-11.6_
 
-- [ ] 11. Add file naming and validation
-  - [ ] 11.1 Ensure all scrapers use consistent output naming
+- [x] 11. Add file naming and validation
+  - [x] 11.1 Ensure all scrapers use consistent output naming
     - Verify all scrapers save as "theme.mp3"
     - Verify filename sanitization is applied
     - _Requirements: 8.1, 8.2_
-  - [ ] 11.2 Add file size validation to all scrapers
+  - [x] 11.2 Add file size validation to all scrapers
     - Check file size >500KB after download
     - Delete and mark failed if too small
     - _Requirements: 7.4, 8.4_
-  - [ ] 11.3 Implement force mode overwrite logic
+  - [x] 11.3 Implement force mode overwrite logic
     - Ensure existing files are replaced when --force is set
     - _Requirements: 8.3_
-  - [ ]\* 11.4 Write property tests for file operations
+  - [x] 11.4 Write property tests for file operations
     - **Property 12: Output File Naming**
     - **Property 15: Force Mode Overwrite**
     - **Validates: Requirements 7.3, 8.1, 8.3**
 
-- [ ] 12. Checkpoint - Integration testing
+- [x] 12. Checkpoint - Integration testing
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ]\* 13. Write integration tests
