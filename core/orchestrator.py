@@ -108,11 +108,11 @@ class Orchestrator:
             return
 
         total_folders = len(series_folders)
-        self.console.print(f"Found {total_folders} series folders\n")
+        self.console.print(f"[bold cyan]Found {total_folders} series folders[/bold cyan]\n")
 
         # Process folders sequentially (simpler and safer than async)
         for index, folder in enumerate(series_folders, start=1):
-            self.console.print(f"\n[bold cyan]Folder {index}/{total_folders}[/bold cyan]")
+            self.console.print(f"\n[bold magenta]━━━ Folder {index}/{total_folders} ━━━[/bold magenta]")
             try:
                 self.process_show(folder)
             except CriticalError:
@@ -213,13 +213,13 @@ class Orchestrator:
             list(folder.iterdir())
         except PermissionError:
             self.console.print(
-                f"[yellow]SKIPPED[/] {show_name} - Permission denied"
+                f"[dim yellow]⊘ SKIPPED[/dim yellow] {show_name} [dim]- Permission denied[/dim]"
             )
             self.results["skipped"] += 1
             return
         except OSError as exc:
             self.console.print(
-                f"[yellow]SKIPPED[/] {show_name} - Cannot access folder: {str(exc)}"
+                f"[dim yellow]⊘ SKIPPED[/dim yellow] {show_name} [dim]- Cannot access folder: {str(exc)}[/dim]"
             )
             self.results["skipped"] += 1
             return
@@ -228,12 +228,12 @@ class Orchestrator:
         existing_theme = self._find_existing_theme(folder)
 
         if existing_theme and not self.force:
-            self.console.print(f"[yellow]SKIPPED[/] {show_name} - File exists")
+            self.console.print(f"[dim yellow]⊘ SKIPPED[/dim yellow] {show_name} [dim]- File exists[/dim]")
             self.results["skipped"] += 1
             return
 
         if self.dry_run:
-            self.console.print(f"[blue]DRY RUN[/] Would process: {show_name}")
+            self.console.print(f"[bright_blue]⚡ DRY RUN[/bright_blue] Would process: {show_name}")
             return
 
         # If force mode is enabled and a theme exists, delete it before downloading
@@ -248,26 +248,26 @@ class Orchestrator:
                 )
 
         # Try each scraper in order (waterfall approach)
-        self.console.print(f"\n[bold]Processing:[/] {show_name}")
+        self.console.print(f"\n[bold white]Processing:[/bold white] [cyan]{show_name}[/cyan]")
 
         for scraper in self.scrapers:
             source_name = scraper.get_source_name()
-            self.console.print(f"  Trying {source_name}...", end="")
+            self.console.print(f"  [dim]Trying[/dim] {source_name}...", end="")
 
             # Apply rate limiting before attempting scraper
             self.rate_limiter.wait(source_name)
 
             try:
                 if scraper.search_and_download(show_name, theme_file):
-                    self.console.print(f" [green]✓[/]")
+                    self.console.print(f" [bold green]✓[/bold green]")
                     self.console.print(
-                        f"[green]SUCCESS[/] Source: {source_name} | "
-                        f"File: {theme_file}"
+                        f"[bold green]✓ SUCCESS[/bold green] [dim]Source:[/dim] {source_name} [dim]|[/dim] "
+                        f"[dim]File:[/dim] {theme_file.name}"
                     )
                     self.results["success"] += 1
                     return
                 else:
-                    self.console.print(f" [red]✗[/]")
+                    self.console.print(f" [red]✗[/red]")
             except OSError as exc:
                 # Handle disk space and permission errors during download
                 self.console.print(f" [red]✗[/]")
@@ -307,17 +307,17 @@ class Orchestrator:
                 if self.verbose:
                     self.console.print(f"    Error: {str(exc)}")
 
-        self.console.print(f"[red]FAILED[/] No sources found for {show_name}")
+        self.console.print(f"[bold red]✗ FAILED[/bold red] [dim]No sources found for[/dim] {show_name}")
         self.results["failed"] += 1
 
     def display_summary(self) -> None:
         """Display results summary table."""
-        table = Table(title="\nProcessing Summary")
-        table.add_column("Status", style="bold")
-        table.add_column("Count", justify="right")
+        table = Table(title="\n[bold cyan]Processing Summary[/bold cyan]", border_style="cyan")
+        table.add_column("Status", style="bold", no_wrap=True)
+        table.add_column("Count", justify="right", style="bold")
 
-        table.add_row("Success", f"[green]{self.results['success']}[/]")
-        table.add_row("Skipped", f"[yellow]{self.results['skipped']}[/]")
-        table.add_row("Failed", f"[red]{self.results['failed']}[/]")
+        table.add_row("✓ Success", f"[bold green]{self.results['success']}[/bold green]")
+        table.add_row("⊘ Skipped", f"[yellow]{self.results['skipped']}[/yellow]")
+        table.add_row("✗ Failed", f"[bold red]{self.results['failed']}[/bold red]")
 
         self.console.print(table)

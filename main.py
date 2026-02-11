@@ -4,11 +4,13 @@ from pathlib import Path
 import sys
 import logging
 from datetime import datetime
+import time
 import typer
 from rich.console import Console
 from core.orchestrator import Orchestrator, CriticalError
 from core.dependencies import validate_dependencies
 
+__version__ = "1.0.0"
 
 app = typer.Typer(
     help="Automate theme song downloads for TV shows and anime",
@@ -20,7 +22,7 @@ console = Console()
 @app.command()
 def main(
     input_dir: Path = typer.Argument(
-        ...,
+        None,
         help="Root directory containing show folders",
         exists=True,
         file_okay=False,
@@ -38,6 +40,11 @@ def main(
         "--verbose",
         "-v",
         help="Enable debug logging"
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit"
     ),
     dry_run: bool = typer.Option(
         False,
@@ -78,8 +85,25 @@ def main(
 
         # Enable verbose logging
         python main.py /path/to/tv_shows --verbose
+
+        # Show version
+        python main.py --version
     """
-    console.print("[bold blue]Show Theme CLI[/bold blue]\n")
+    # Handle version flag
+    if version:
+        console.print(f"[bold cyan]Show Theme CLI[/bold cyan] version [bold]{__version__}[/bold]")
+        sys.exit(0)
+
+    # Validate input_dir is provided
+    if input_dir is None:
+        console.print("[red]Error:[/red] INPUT_DIR is required")
+        console.print("Try 'python main.py --help' for more information.")
+        sys.exit(1)
+
+    # Start timing
+    start_time = time.time()
+
+    console.print(f"[bold cyan]Show Theme CLI[/bold cyan] [dim]v{__version__}[/dim]\n")
 
     # Setup error logging to file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -101,6 +125,15 @@ def main(
     try:
         orchestrator = Orchestrator(console, force, dry_run, verbose, timeout)
         orchestrator.process_directory(input_dir)
+        
+        # Display elapsed time
+        elapsed_time = time.time() - start_time
+        minutes, seconds = divmod(int(elapsed_time), 60)
+        if minutes > 0:
+            time_str = f"{minutes}m {seconds}s"
+        else:
+            time_str = f"{seconds}s"
+        console.print(f"\n[dim]Completed in {time_str}[/dim]")
     except CriticalError as e:
         logger.error(f"Critical error: {str(e)}", exc_info=True)
         console.print(f"[red]CRITICAL ERROR:[/] {str(e)}")
