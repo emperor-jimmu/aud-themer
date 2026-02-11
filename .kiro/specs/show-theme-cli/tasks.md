@@ -20,22 +20,18 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement filename sanitization function
     - Implement file size validation function (>500KB check)
     - _Requirements: 1.1, 8.2, 7.4, 8.4_
-  
   - [x] 2.2 Write property tests for utility functions
     - **Property 1: Path Validation Correctness**
     - **Property 14: Filename Sanitization**
     - **Property 13: File Size Validation**
     - **Validates: Requirements 1.1, 8.2, 7.4, 8.4**
-  
   - [x] 2.3 Create scrapers/base.py with ThemeScraper abstract base class
     - Define abstract search_and_download method
     - Define abstract get_source_name method
     - _Requirements: All scraper requirements_
-  
   - [x] 2.4 Add string similarity matching to core/utils.py
     - Implement name similarity function using difflib.SequenceMatcher
     - _Requirements: 4.3_
-  
   - [x] 2.5 Write property test for name similarity matching
     - **Property 8: Anime Name Similarity Matching**
     - **Validates: Requirements 4.3**
@@ -48,11 +44,9 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement download functionality
     - Add rate limiting delays (1-3 seconds)
     - _Requirements: 3.1-3.6, 9.4_
-  
   - [x] 3.2 Write property test for search result matching
     - **Property 7: Search Result Matching**
     - **Validates: Requirements 3.3**
-  
   - [x] 3.3 Write unit tests for TelevisionTunes scraper
     - Test successful search and download flow
     - Test handling of no results
@@ -60,22 +54,20 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Use Playwright request interception for mocking
     - _Requirements: 3.1-3.6_
 
-- [ ] 4. Implement AnimeThemes API scraper
-  - [ ] 4.1 Create scrapers/anime_themes.py with AnimeThemesScraper class
+- [x] 4. Implement AnimeThemes API scraper
+  - [x] 4.1 Create scrapers/anime_themes.py with AnimeThemesScraper class
     - Implement API search using httpx
     - Implement anime name matching logic
     - Implement theme priority selection (OP1 > OP > ED)
     - Implement video download functionality
     - Implement FFmpeg audio extraction
     - _Requirements: 4.1-4.7, 7.1-7.3_
-  
-  - [ ] 4.2 Write property tests for AnimeThemes scraper
+  - [x] 4.2 Write property tests for AnimeThemes scraper
     - **Property 9: Theme Priority Selection**
     - **Property 10: Format Conversion Consistency**
     - **Property 11: Bitrate Selection Logic**
     - **Validates: Requirements 4.4, 7.1, 7.2**
-  
-  - [ ] 4.3 Write unit tests for AnimeThemes scraper
+  - [x] 4.3 Write unit tests for AnimeThemes scraper
     - Test API request formatting
     - Test JSON response parsing
     - Test video download
@@ -91,7 +83,6 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement download and audio extraction
     - Add rate limiting delays
     - _Requirements: 5.1-5.6, 9.4_
-  
   - [ ] 5.2 Write unit tests for Themes.moe scraper
     - Test search detection
     - Test media element extraction
@@ -106,8 +97,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Configure audio extraction options (192kbps minimum)
     - Configure single video download (no playlists)
     - _Requirements: 6.1-6.5_
-  
-  - [ ]* 6.2 Write unit tests for YouTube scraper
+  - [ ]\* 6.2 Write unit tests for YouTube scraper
     - Test yt-dlp configuration
     - Test query formatting
     - Test audio extraction
@@ -125,8 +115,7 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement force mode logic
     - Implement dry-run mode logic
     - _Requirements: 1.1-1.5, 2.1-2.5_
-  
-  - [ ]* 8.2 Write property tests for orchestrator
+  - [ ]\* 8.2 Write property tests for orchestrator
     - **Property 2: Directory Scanning Completeness**
     - **Property 3: Show Name Extraction Consistency**
     - **Property 4: Dry Run File Safety**
@@ -134,20 +123,17 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - **Property 6: Force Mode Override**
     - **Property 19: Multiple Theme Format Detection**
     - **Validates: Requirements 1.2, 1.4, 1.5, 2.1, 2.2, 2.4, 2.5**
-  
   - [ ] 8.3 Implement source waterfall logic in Orchestrator
     - Implement scraper priority ordering
     - Implement fallback mechanism (try next source on failure)
     - Implement success/skip/failure tracking
     - _Requirements: All scraper requirements_
-  
   - [ ] 8.4 Implement progress display with folder progression
     - Add folder index/total count display
     - Add colored status indicators (green/yellow/red)
     - Add source attempt display
     - Add success/skip/failure messages
     - _Requirements: 10.1-10.8_
-  
   - [ ] 8.5 Implement results summary table
     - Create Rich table with success/skip/failure counts
     - Display at end of processing
@@ -158,19 +144,16 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Implement 3-attempt retry for network timeouts
     - Implement exponential backoff (0s, 2s, 4s)
     - _Requirements: 9.1_
-  
-  - [ ]* 9.2 Write property test for retry logic
+  - [ ]\* 9.2 Write property test for retry logic
     - **Property 16: Retry with Exponential Backoff**
     - **Validates: Requirements 9.1**
-  
   - [ ] 9.3 Add error handling to orchestrator
     - Handle permission errors (skip folder with warning)
     - Handle disk space errors (log and mark failed)
     - Handle critical errors (exit with error code 1)
     - Ensure single show failure doesn't stop processing
     - _Requirements: 9.2-9.5_
-  
-  - [ ]* 9.4 Write unit tests for error handling
+  - [ ]\* 9.4 Write unit tests for error handling
     - Test permission error handling
     - Test disk space error handling
     - Test critical error handling
@@ -185,21 +168,18 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Define --dry-run flag
     - Add help documentation
     - _Requirements: 11.1-11.6_
-  
   - [ ] 10.2 Wire CLI to orchestrator
     - Initialize Rich console
     - Create Orchestrator instance with configuration
     - Invoke process_directory method
     - Handle exceptions and exit codes
     - _Requirements: 11.1-11.6_
-  
   - [ ] 10.3 Implement verbose mode logging
     - Add debug output for API responses
     - Add debug output for Playwright traces
     - Conditional on --verbose flag
     - _Requirements: 10.6_
-  
-  - [ ]* 10.4 Write unit tests for CLI
+  - [ ]\* 10.4 Write unit tests for CLI
     - Test argument parsing
     - Test flag handling
     - Test help output
@@ -212,17 +192,14 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Verify all scrapers save as "theme.mp3"
     - Verify filename sanitization is applied
     - _Requirements: 8.1, 8.2_
-  
   - [ ] 11.2 Add file size validation to all scrapers
     - Check file size >500KB after download
     - Delete and mark failed if too small
     - _Requirements: 7.4, 8.4_
-  
   - [ ] 11.3 Implement force mode overwrite logic
     - Ensure existing files are replaced when --force is set
     - _Requirements: 8.3_
-  
-  - [ ]* 11.4 Write property tests for file operations
+  - [ ]\* 11.4 Write property tests for file operations
     - **Property 12: Output File Naming**
     - **Property 15: Force Mode Overwrite**
     - **Validates: Requirements 7.3, 8.1, 8.3**
@@ -230,20 +207,18 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
 - [ ] 12. Checkpoint - Integration testing
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ]* 13. Write integration tests
-  - [ ]* 13.1 Create end-to-end test with mocked sources
+- [ ]\* 13. Write integration tests
+  - [ ]\* 13.1 Create end-to-end test with mocked sources
     - Test full workflow from CLI to file creation
     - Mock all external dependencies (Playwright, httpx, yt-dlp, FFmpeg)
     - Verify file creation and naming
     - _Requirements: All requirements_
-  
-  - [ ]* 13.2 Test error scenarios end-to-end
+  - [ ]\* 13.2 Test error scenarios end-to-end
     - Test all sources failing
     - Test network timeouts
     - Test invalid input directory
     - _Requirements: 9.1-9.5_
-  
-  - [ ]* 13.3 Test CLI output formatting
+  - [ ]\* 13.3 Test CLI output formatting
     - Verify progress display format
     - Verify summary table format
     - Verify colored output
@@ -255,7 +230,6 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Display clear error message if missing
     - Exit with error code 1
     - _Requirements: 12.7_
-  
   - [ ] 14.2 Add Playwright browser installation check
     - Verify Playwright browsers are installed
     - Display installation instructions if missing
@@ -267,11 +241,9 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Document CLI usage and examples
     - Document requirements (Python 3.12+, FFmpeg)
     - Document supported sources
-  
   - [ ] 15.2 Add docstrings to all public functions and classes
     - Follow Google-style docstring format
     - Include parameter types and return types
-  
   - [ ] 15.3 Run pylint and fix any issues
     - Ensure code passes pylint checks
     - Fix any style violations
