@@ -53,7 +53,9 @@ class Orchestrator:
             "skipped": 0,
             "failed": 0
         }
-        self._results_lock = asyncio.Lock()
+        # Use threading.Lock for synchronous code
+        import threading
+        self._results_lock = threading.Lock()
 
         # Initialize scrapers in priority order
         self._initialize_default_scrapers()
@@ -110,54 +112,31 @@ class Orchestrator:
         total_folders = len(series_folders)
         self.console.print(f"Found {total_folders} series folders\n")
 
-        # Run async processing
-        asyncio.run(self._process_folders_async(series_folders))
+        # Process folders sequentially (simpler and safer than async)
+        for index, folder in enumerate(series_folders, start=1):
+            self.console.print(f"\n[bold cyan]Folder {index}/{total_folders}[/bold cyan]")
+            try:
+                self.process_show(folder)
+            except CriticalError:
+                # Re-raise critical errors to stop execution
+                raise
+            except Exception as exc:
+                # Log non-critical errors and continue processing
+                self.logger.error(
+                    f"Unexpected error processing {folder.name}: {str(exc)}",
+                    exc_info=True
+                )
+                self.console.print(
+                    f"[red]ERROR[/] Unexpected error processing {folder.name}: {str(exc)}"
+                )
+                if self.verbose:
+                    import traceback
+                    self.console.print(traceback.format_exc())
+                with self._results_lock:
+                    self.results["failed"] += 1
 
         self.display_summary()
 
-    async def _process_folders_async(self, folders: List[Path]) -> None:
-        """
-        Process folders concurrently with limited concurrency.
-
-        Args:
-            folders: List of series folders to process
-        """
-        semaphore = asyncio.Semaphore(self.max_concurrent)
-        total_folders = len(folders)
-
-        async def process_with_semaphore(folder: Path, index: int) -> None:
-            async with semaphore:
-                self.console.print(f"\n[bold cyan]Folder {index}/{total_folders}[/bold cyan]")
-                try:
-                    # Run the synchronous process_show in a thread pool
-                    await asyncio.to_thread(self.process_show, folder)
-                except CriticalError:
-                    # Re-raise critical errors to stop execution
-                    raise
-                except Exception as e:
-                    # Log non-critical errors and continue processing
-                    self.logger.error(
-                        f"Unexpected error processing {folder.name}: {str(e)}",
-                        exc_info=True
-                    )
-                    self.console.print(
-                        f"[red]ERROR[/] Unexpected error processing {folder.name}: {str(e)}"
-                    )
-                    if self.verbose:
-                        import traceback
-                        self.console.print(traceback.format_exc())
-                    async with self._results_lock:
-                        self.results["failed"] += 1
-
-        # Create tasks for all folders
-        tasks = [
-            process_with_semaphore(folder, index)
-            for index, folder in enumerate(folders, start=1)
-        ]
-
-        # Wait for all tasks to complete
-        # gather will propagate the first exception (including CriticalError)
-        await asyncio.gather(*tasks)
 
     def _scan_directory(self, input_dir: Path) -> List[Path]:
         """
@@ -219,7 +198,7 @@ class Orchestrator:
 
     def process_show(self, folder: Path) -> None:
         """
-        Process a single show folder (synchronous version).
+        Process a single show folder.
 
         Args:
             folder: Path to series folder
@@ -239,13 +218,15 @@ class Orchestrator:
             self.console.print(
                 f"[yellow]SKIPPED[/] {show_name} - Permission denied"
             )
-            self.results["skipped"] += 1
+            with self._results_lock:
+                self.results["skipped"] += 1
             return
-        except OSError as e:
+        except OSError as exc:
             self.console.print(
-                f"[yellow]SKIPPED[/] {show_name} - Cannot access folder: {str(e)}"
+                f"[yellow]SKIPPED[/] {show_name} - Cannot access folder: {str(exc)}"
             )
-            self.results["skipped"] += 1
+            with self._results_lock:
+                self.results["skipped"] += 1
             return
 
         # Check if theme already exists
@@ -253,7 +234,8 @@ class Orchestrator:
 
         if existing_theme and not self.force:
             self.console.print(f"[yellow]SKIPPED[/] {show_name} - File exists")
-            self.results["skipped"] += 1
+            with self._results_lock:
+                self.results["skipped"] += 1
             return
 
         if self.dry_run:
@@ -266,9 +248,9 @@ class Orchestrator:
                 existing_theme.unlink()
                 if self.verbose:
                     self.console.print(f"  Deleted existing theme: {existing_theme.name}")
-            except OSError as e:
+            except OSError as exc:
                 self.console.print(
-                    f"[yellow]Warning: Could not delete existing theme: {str(e)}[/]"
+                    f"[yellow]Warning: Could not delete existing theme: {str(exc)}[/]"
                 )
 
         # Try each scraper in order (waterfall approach)
@@ -285,42 +267,54 @@ class Orchestrator:
                         f"[green]SUCCESS[/] Source: {source_name} | "
                         f"File: {theme_file}"
                     )
-                    self.results["success"] += 1
+                    with self._results_lock:
+                        self.results["success"] += 1
                     return
                 else:
                     self.console.print(f" [red]✗[/]")
-            except OSError as e:
+            except OSError as exc:
                 # Handle disk space and permission errors during download
                 self.console.print(f" [red]✗[/]")
-                if "No space left on device" in str(e) or "Disk quota exceeded" in str(e):
-                    self.logger.error(f"Disk space error for {show_name}: {str(e)}", exc_info=True)
-                    self.console.print(
-                        f"[red]ERROR[/] Disk space error: {str(e)}"
+                import errno
+                if exc.errno in (errno.ENOSPC, errno.EDQUOT):
+                    self.logger.error(
+                        f"Disk space error for {show_name}: {str(exc)}",
+                        exc_info=True
                     )
-                    self.results["failed"] += 1
+                    self.console.print(
+                        f"[red]ERROR[/] Disk space error: {str(exc)}"
+                    )
+                    with self._results_lock:
+                        self.results["failed"] += 1
                     return
-                elif "Permission denied" in str(e):
-                    self.logger.warning(f"Permission denied for {show_name}: {str(e)}")
+                elif exc.errno == errno.EACCES:
+                    self.logger.warning(
+                        f"Permission denied for {show_name}: {str(exc)}"
+                    )
                     self.console.print(
                         f"[yellow]Warning: Permission denied writing to {folder}[/]"
                     )
                     # Continue to next scraper
                 else:
-                    self.logger.error(f"OS error for {show_name}: {str(e)}", exc_info=True)
+                    self.logger.error(
+                        f"OS error for {show_name}: {str(exc)}",
+                        exc_info=True
+                    )
                     if self.verbose:
-                        self.console.print(f"    OS Error: {str(e)}")
-            except Exception as e:
+                        self.console.print(f"    OS Error: {str(exc)}")
+            except Exception as exc:
                 self.logger.error(
                     f"Unexpected exception in scraper {scraper.get_source_name()} "
-                    f"for {show_name}: {str(e)}",
+                    f"for {show_name}: {str(exc)}",
                     exc_info=True
                 )
                 self.console.print(f" [red]✗[/]")
                 if self.verbose:
-                    self.console.print(f"    Error: {str(e)}")
+                    self.console.print(f"    Error: {str(exc)}")
 
         self.console.print(f"[red]FAILED[/] No sources found for {show_name}")
-        self.results["failed"] += 1
+        with self._results_lock:
+            self.results["failed"] += 1
 
     def display_summary(self) -> None:
         """Display results summary table."""

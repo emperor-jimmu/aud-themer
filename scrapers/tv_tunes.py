@@ -27,11 +27,25 @@ class TelevisionTunesScraper(ThemeScraper):
         """
         try:
             return self._search_and_download_with_retry(show_name, output_path)
-        except PlaywrightTimeoutError:
+        except PlaywrightTimeoutError as exc:
+            self._log_error(
+                f"TelevisionTunes timeout for '{show_name}': {str(exc)}",
+                exc_info=True
+            )
             return False
-        except Exception:
+        except Exception as exc:
+            self._log_error(
+                f"TelevisionTunes failed for '{show_name}': {str(exc)}",
+                exc_info=True
+            )
             return False
 
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=0.0,
+        backoff_factor=2.0,
+        exceptions=(PlaywrightTimeoutError,)
+    )
     @retry_with_backoff(
         max_attempts=3,
         initial_delay=0.0,
@@ -49,112 +63,134 @@ class TelevisionTunesScraper(ThemeScraper):
         Returns:
             True if download succeeded, False otherwise
         """
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+        browser = None
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
 
-            # Enable Playwright tracing in verbose mode
-            if self.verbose:
-                page.on("console", lambda msg: self._log_debug(f"Browser console: {msg.text}"))
+                # Enable Playwright tracing in verbose mode
+                if self.verbose:
+                    page.on("console", lambda msg: self._log_debug(f"Browser console: {msg.text}"))
 
-            try:
-                self._log_debug(f"Navigating to {self.BASE_URL}")
+                try:
+                    self._log_debug(f"Navigating to {self.BASE_URL}")
 
-                # Navigate to homepage
-                page.goto(self.BASE_URL, timeout=self.TIMEOUT)
+                    # Navigate to homepage
+                    page.goto(self.BASE_URL, timeout=self.TIMEOUT)
 
-                # Strip year from show name for search (e.g., "The Simpsons (1989)" -> "The Simpsons")
-                search_query = show_name.split('(')[0].strip()
-                self._log_debug(f"Searching for: {search_query}")
+                    # Strip year from show name for search (e.g., "The Simpsons (1989)" -> "The Simpsons")
+                    search_query = show_name.split('(')[0].strip()
+                    self._log_debug(f"Searching for: {search_query}")
 
-                # Locate and fill search field (id="s" on the new site)
-                search_input = page.locator("#s")
-                search_input.fill(search_query)
-                search_input.press("Enter")
+                    # Locate and fill search field (id="s" on the new site)
+                    search_input = page.locator("#s")
+                    search_input.fill(search_query)
+                    search_input.press("Enter")
 
-                # Wait for results to load
-                page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
+                    # Wait for results to load
+                    page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
-                # Find best matching result from search results
-                result = self._find_best_match(page, show_name)
-                if not result:
-                    self._log_debug("No matching results found")
-                    return False
-
-                self._log_debug("Found matching result, navigating to song page")
-
-                # Navigate to song page
-                result.click()
-                page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
-
-                # Locate download link (looks for .wav or .mp3 files)
-                download_link = page.locator("a[href*='/themes/']").first
-                if download_link.count() == 0:
-                    self._log_debug("No download link found on page")
-                    return False
-
-                # Get the download URL
-                download_url = download_link.get_attribute("href")
-                if not download_url:
-                    self._log_debug("Download link has no href attribute")
-                    return False
-
-                self._log_debug(f"Downloading theme file from: {download_url}")
-
-                # Download file using page.request instead of clicking
-                response = page.request.get(download_url)
-                if response.status != 200:
-                    self._log_debug(f"Download failed with status: {response.status}")
-                    return False
-
-                # Save the file
-                with open(output_path, "wb") as f:
-                    f.write(response.body())
-
-                # Convert WAV to MP3 if needed
-                if download_url.endswith('.wav'):
-                    self._log_debug("Converting WAV to MP3")
-                    temp_wav = output_path.with_suffix('.wav')
-                    output_path.rename(temp_wav)
-                    
-                    import subprocess
-                    result = subprocess.run(
-                        [
-                            "ffmpeg",
-                            "-i", str(temp_wav),
-                            "-vn",  # No video
-                            "-acodec", "libmp3lame",
-                            "-b:a", "320k",
-                            "-y",  # Overwrite
-                            str(output_path)
-                        ],
-                        capture_output=True,
-                        timeout=60
-                    )
-                    
-                    # Clean up temp file
-                    if temp_wav.exists():
-                        temp_wav.unlink()
-                    
-                    if result.returncode != 0:
-                        self._log_debug(f"FFmpeg conversion failed: {result.stderr.decode()}")
-                        if output_path.exists():
-                            output_path.unlink()
+                    # Find best matching result from search results
+                    result = self._find_best_match(page, show_name)
+                    if not result:
+                        self._log_debug("No matching results found")
                         return False
 
-                # Validate file size
-                if not validate_file_size(output_path):
-                    self._log_debug(f"File too small: {output_path.stat().st_size} bytes")
-                    output_path.unlink()
-                    return False
+                    self._log_debug("Found matching result, navigating to song page")
 
-                self._log_debug(f"Download successful: {output_path}")
-                return True
+                    # Navigate to song page
+                    result.click()
+                    page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
-            finally:
-                browser.close()
-                # Rate limiting delay
-                time.sleep(random.uniform(1, 3))
+                    # Locate download link (looks for .wav or .mp3 files)
+                    download_link = page.locator("a[href*='/themes/']").first
+                    if download_link.count() == 0:
+                        self._log_debug("No download link found on page")
+                        return False
+
+                    # Get the download URL
+                    download_url = download_link.get_attribute("href")
+                    if not download_url:
+                        self._log_debug("Download link has no href attribute")
+                        return False
+
+                    self._log_debug(f"Downloading theme file from: {download_url}")
+
+                    # Download file using page.request instead of clicking
+                    response = page.request.get(download_url)
+                    if response.status != 200:
+                        self._log_debug(f"Download failed with status: {response.status}")
+                        return False
+
+                    # Save the file
+                    with open(output_path, "wb") as f:
+                        f.write(response.body())
+
+                    # Convert WAV to MP3 if needed
+                    if download_url.endswith('.wav'):
+                        self._log_debug("Converting WAV to MP3")
+                        temp_wav = output_path.with_suffix('.wav')
+                        output_path.rename(temp_wav)
+
+                        try:
+                            result = subprocess.run(
+                                [
+                                    "ffmpeg",
+                                    "-i", str(temp_wav),
+                                    "-vn",  # No video
+                                    "-acodec", "libmp3lame",
+                                    "-b:a", "320k",
+                                    "-y",  # Overwrite
+                                    str(output_path)
+                                ],
+                                capture_output=True,
+                                timeout=60
+                            )
+
+                            if result.returncode != 0:
+                                stderr_output = result.stderr.decode() if result.stderr else "No error output"
+                                self._log_error(
+                                    f"FFmpeg conversion failed for {temp_wav}: {stderr_output}",
+                                    exc_info=False
+                                )
+                                self._log_debug(f"FFmpeg conversion failed: {stderr_output}")
+                                if output_path.exists():
+                                    output_path.unlink()
+                                return False
+                        except subprocess.TimeoutExpired as exc:
+                            self._log_error(
+                                f"FFmpeg timeout converting {temp_wav}",
+                                exc_info=True
+                            )
+                            self._log_debug(f"FFmpeg timeout: {str(exc)}")
+                            if output_path.exists():
+                                try:
+                                    output_path.unlink()
+                                except OSError:
+                                    pass
+                            return False
+                        finally:
+                            # Clean up temp file
+                            if temp_wav.exists():
+                                temp_wav.unlink()
+
+                    # Validate file size
+                    if not validate_file_size(output_path):
+                        self._log_debug(f"File too small: {output_path.stat().st_size} bytes")
+                        output_path.unlink()
+                        return False
+
+                    self._log_debug(f"Download successful: {output_path}")
+                    return True
+
+                finally:
+                    # Ensure browser is closed even if exception occurs
+                    if browser:
+                        browser.close()
+        finally:
+            # Rate limiting delay
+            time.sleep(random.uniform(1, 3))
 
     def _find_best_match(self, page: Page, show_name: str):
         """

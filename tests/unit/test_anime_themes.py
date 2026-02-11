@@ -11,83 +11,81 @@ from scrapers.anime_themes import AnimeThemesScraper
 def test_successful_api_search_and_download():
     """
     Test successful API search and download flow.
-    
+
     Validates: Requirements 4.1-4.7
     """
     scraper = AnimeThemesScraper()
-    
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
         temp_video = Path(tmp_dir) / "temp_theme.webm"
-        
-        # Mock API response
+
+        # Mock API response with new structure (anime array at top level)
         mock_api_response = {
-            "search": {
-                "anime": [
-                    {
-                        "name": "Test Anime",
-                        "animethemes": [
-                            {
-                                "type": "OP",
-                                "sequence": 1,
-                                "animethemeentries": [
-                                    {
-                                        "videos": [
-                                            {"link": "https://example.com/video.webm"}
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
+            "anime": [
+                {
+                    "name": "Test Anime",
+                    "animethemes": [
+                        {
+                            "type": "OP",
+                            "sequence": 1,
+                            "animethemeentries": [
+                                {
+                                    "videos": [
+                                        {"link": "https://example.com/video.webm"}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
-        
+
         with patch('httpx.Client') as mock_client_class, \
              patch('httpx.stream') as mock_stream, \
              patch('subprocess.run') as mock_subprocess:
-            
+
             # Mock API client
             mock_client = MagicMock()
             mock_client_class.return_value.__enter__.return_value = mock_client
-            
+
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = mock_api_response
             mock_client.get.return_value = mock_response
-            
+
             # Mock video download
             mock_stream_response = MagicMock()
             mock_stream_response.status_code = 200
             mock_stream_response.iter_bytes.return_value = [b'0' * 1_000_000]
             mock_stream.return_value.__enter__.return_value = mock_stream_response
-            
+
             # Mock FFmpeg
             mock_ffmpeg_result = Mock()
             mock_ffmpeg_result.returncode = 0
             mock_subprocess.return_value = mock_ffmpeg_result
-            
+
             # Create output file when FFmpeg runs
             def subprocess_side_effect(*args, **kwargs):
                 output_path.write_bytes(b'0' * 600_000)  # 600KB file
                 return mock_ffmpeg_result
-            
+
             mock_subprocess.side_effect = subprocess_side_effect
-            
+
             # Execute the test
             result = scraper.search_and_download("Test Anime", output_path)
-            
+
             # Verify success
             assert result is True
             assert output_path.exists()
             assert output_path.stat().st_size > 500_000
-            
-            # Verify API was called correctly
+
+            # Verify API was called correctly with new endpoint
             mock_client.get.assert_called_once()
             call_args = mock_client.get.call_args
-            assert "search" in call_args[0][0]
-            assert call_args[1]["params"]["q"] == "Test Anime"
+            assert "anime" in call_args[0][0]
+            assert call_args[1]["params"]["filter[name]"] == "Test Anime"
             assert "animethemes.animethemeentries.videos" in call_args[1]["params"]["include"]
 
 
@@ -106,7 +104,7 @@ def test_api_request_formatting():
         
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"search": {"anime": []}}
+        mock_response.json.return_value = {"anime": []}
         mock_client.get.return_value = mock_response
         
         # Execute search
@@ -116,12 +114,12 @@ def test_api_request_formatting():
         mock_client.get.assert_called_once()
         call_args = mock_client.get.call_args
         
-        # Check URL
-        assert call_args[0][0] == "https://api.animethemes.moe/search"
+        # Check URL - now uses /anime endpoint with filter
+        assert call_args[0][0] == "https://api.animethemes.moe/anime"
         
-        # Check parameters
+        # Check parameters - now uses filter[name] instead of q
         params = call_args[1]["params"]
-        assert params["q"] == "My Anime"
+        assert params["filter[name]"] == "My Anime"
         assert params["include"] == "animethemes.animethemeentries.videos"
 
 
@@ -135,13 +133,11 @@ def test_json_response_parsing():
     scraper = AnimeThemesScraper()
     
     mock_api_response = {
-        "search": {
-            "anime": [
-                {"name": "Different Anime"},
-                {"name": "Test Anime"},
-                {"name": "Another Anime"}
-            ]
-        }
+        "anime": [
+            {"name": "Different Anime"},
+            {"name": "Test Anime"},
+            {"name": "Another Anime"}
+        ]
     }
     
     with patch('httpx.Client') as mock_client_class:
@@ -179,7 +175,7 @@ def test_handling_no_api_results():
             
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = {"search": {"anime": []}}
+            mock_response.json.return_value = {"anime": []}
             mock_client.get.return_value = mock_response
             
             # Execute the test
@@ -384,42 +380,41 @@ def test_file_size_validation_after_extraction():
 def test_temp_file_cleanup():
     """
     Test that temporary video files are cleaned up after processing.
-    
-    Validates: Requirements 4.5, 4.6
+
+    Validates: Requirements 4.7
     """
     scraper = AnimeThemesScraper()
-    
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "theme.mp3"
-        temp_video = Path(tmp_dir) / "temp_theme.webm"
-        
+        temp_video = output_path.parent / f"temp_{output_path.stem}.webm"
+
+        # Mock API response with new structure
         mock_api_response = {
-            "search": {
-                "anime": [
-                    {
-                        "name": "Test Anime",
-                        "animethemes": [
-                            {
-                                "type": "OP",
-                                "sequence": 1,
-                                "animethemeentries": [
-                                    {
-                                        "videos": [
-                                            {"link": "https://example.com/video.webm"}
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
+            "anime": [
+                {
+                    "name": "Test Anime",
+                    "animethemes": [
+                        {
+                            "type": "OP",
+                            "sequence": 1,
+                            "animethemeentries": [
+                                {
+                                    "videos": [
+                                        {"link": "https://example.com/video.webm"}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
-        
+
         with patch('httpx.Client') as mock_client_class, \
              patch('httpx.stream') as mock_stream, \
              patch('subprocess.run') as mock_subprocess:
-            
+
             # Mock API
             mock_client = MagicMock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -427,26 +422,26 @@ def test_temp_file_cleanup():
             mock_response.status_code = 200
             mock_response.json.return_value = mock_api_response
             mock_client.get.return_value = mock_response
-            
+
             # Mock video download
             mock_stream_response = MagicMock()
             mock_stream_response.status_code = 200
             mock_stream_response.iter_bytes.return_value = [b'0' * 1_000_000]
             mock_stream.return_value.__enter__.return_value = mock_stream_response
-            
+
             # Mock FFmpeg
             mock_ffmpeg_result = Mock()
             mock_ffmpeg_result.returncode = 0
-            
+
             def subprocess_side_effect(*args, **kwargs):
                 output_path.write_bytes(b'0' * 600_000)
                 return mock_ffmpeg_result
-            
+
             mock_subprocess.side_effect = subprocess_side_effect
-            
+
             # Execute
             result = scraper.search_and_download("Test Anime", output_path)
-            
+
             # Verify temp file was cleaned up
             assert result is True
             assert not temp_video.exists()

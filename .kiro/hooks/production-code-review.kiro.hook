@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Production Code Review",
+  "description": "Comprehensive code review analyzing best practices, design patterns, testing quality, code smells, logging implementation, and production readiness across the codebase",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Perform a comprehensive production-ready code review of the codebase:\n\n1. **Best Practices & Design Patterns**: Review architecture, SOLID principles, separation of concerns, and design pattern usage\n2. **Code Smells & Pitfalls**: Identify common issues like code duplication, long methods, tight coupling, magic numbers, error swallowing\n3. **Testing Quality**: Analyze test coverage, test organization, property-based testing effectiveness, edge case handling, and mock usage\n4. **Logging & Observability**: Verify proper logging levels, structured logging, error context, and production debugging capabilities\n5. **Production Readiness**: Check error handling, resource cleanup, performance considerations, security issues, and operational concerns\n6. **Code Quality**: Review naming conventions, documentation, type hints, and maintainability\n\nFocus on actionable improvements with specific file/line references. Prioritize issues by severity (critical, high, medium, low)."
+  }
+}

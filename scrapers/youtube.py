@@ -30,6 +30,12 @@ class YoutubeScraper(ThemeScraper):
         backoff_factor=2.0,
         exceptions=(yt_dlp.utils.DownloadError,)
     )
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=0.0,
+        backoff_factor=2.0,
+        exceptions=(yt_dlp.utils.DownloadError,)
+    )
     def _search_and_download_with_retry(self, show_name: str, output_path: Path) -> bool:
         """
         Internal method with retry logic for network timeouts.
@@ -92,7 +98,12 @@ class YoutubeScraper(ThemeScraper):
 
             self._log_debug(f"Download successful: {output_path}")
             return True
-        except Exception:
+        except Exception as exc:
+            self._log_error(
+                f"YouTube download failed for '{show_name}': {str(exc)}",
+                exc_info=True
+            )
+            self._log_debug(f"Exception: {str(exc)}")
             return False
 
     def get_source_name(self) -> str:
