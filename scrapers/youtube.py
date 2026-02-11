@@ -65,6 +65,13 @@ class YoutubeScraper(ThemeScraper):
                 'noplaylist': True,  # Don't download playlists
                 'quiet': not self.verbose,
                 'no_warnings': not self.verbose,
+                # Enable remote components for JS challenge solving
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'web'],
+                        'skip': ['hls', 'dash']
+                    }
+                }
             }
 
             if self.verbose:

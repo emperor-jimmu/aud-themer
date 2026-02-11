@@ -1,5 +1,6 @@
 """TelevisionTunes.co.uk scraper implementation."""
 
+import subprocess
 import time
 import random
 from pathlib import Path
