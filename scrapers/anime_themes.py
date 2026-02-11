@@ -92,9 +92,13 @@ class AnimeThemesScraper(ThemeScraper):
                 return False
 
             self._log_debug("Extracting audio with FFmpeg")
+            self._log_debug(f"Input video: {temp_video}, size: {temp_video.stat().st_size} bytes")
+            self._log_debug(f"Output path: {output_path}")
 
             # Extract audio using FFmpeg with improved error handling
             success, ffmpeg_error = convert_audio(temp_video, output_path)
+            
+            self._log_debug(f"FFmpeg conversion completed: success={success}")
 
             # Cleanup temp file
             if temp_video.exists():
@@ -106,6 +110,19 @@ class AnimeThemesScraper(ThemeScraper):
             duration = time.time() - start_time
 
             if success:
+                # Validate file size
+                if output_path.stat().st_size < Config.MIN_FILE_SIZE_BYTES:
+                    self._log_debug(
+                        f"File too small: {output_path.stat().st_size} bytes "
+                        f"(min: {Config.MIN_FILE_SIZE_BYTES})"
+                    )
+                    if output_path.exists():
+                        output_path.unlink()
+                    self.structured_logger.log_scraper_result(
+                        "AnimeThemes", show_name, False, duration, "File too small"
+                    )
+                    return False
+                
                 self._log_debug(f"Audio extraction successful: {output_path}")
                 file_size = output_path.stat().st_size
                 self.structured_logger.log_download(

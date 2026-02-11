@@ -184,7 +184,8 @@ def convert_audio(
             ],
             capture_output=True,
             timeout=timeout,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL  # Prevent FFmpeg from waiting for input
         )
 
         if result.returncode != 0:
