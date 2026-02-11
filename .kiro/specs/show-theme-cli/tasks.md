@@ -223,13 +223,13 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Verify colored output
     - _Requirements: 10.1-10.8_
 
-- [ ] 14. Add dependency validation
-  - [ ] 14.1 Add FFmpeg availability check at startup
+- [x] 14. Add dependency validation
+  - [x] 14.1 Add FFmpeg availability check at startup
     - Check if FFmpeg is installed
     - Display clear error message if missing
     - Exit with error code 1
     - _Requirements: 12.7_
-  - [ ] 14.2 Add Playwright browser installation check
+  - [x] 14.2 Add Playwright browser installation check
     - Verify Playwright browsers are installed using try/catch
     - Catch playwright.\_impl.\_api_types.Error for missing browser detection
     - Display installation instructions if missing (playwright install chromium)

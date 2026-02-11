@@ -5,6 +5,7 @@ import sys
 import typer
 from rich.console import Console
 from core.orchestrator import Orchestrator, CriticalError
+from core.dependencies import validate_dependencies
 
 
 app = typer.Typer(
@@ -71,6 +72,9 @@ def main(
         python main.py /path/to/tv_shows --verbose
     """
     console.print("[bold blue]Show Theme CLI[/bold blue]\n")
+    
+    # Validate dependencies before processing
+    validate_dependencies(console)
     
     try:
         orchestrator = Orchestrator(console, force, dry_run, verbose)
