@@ -125,6 +125,11 @@ class AnimeThemesScraper(ThemeScraper):
 
             data = response.json()
 
+            # Handle case where API returns a list instead of dict
+            if isinstance(data, list):
+                self._log_debug("API returned a list instead of dict, no results")
+                return None
+
             if self.verbose:
                 anime_count = len(data.get("search", {}).get("anime", []))
                 self._log_debug(f"API returned {anime_count} anime results")

@@ -101,6 +101,18 @@ class ThemesMoeScraper(ThemeScraper):
                 search_input.first.press("Enter")
                 page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
 
+                # Check for "no results" message
+                no_results = page.locator("text=/No anime found|No results available/i")
+                if no_results.count() > 0:
+                    self._log_debug("No anime found in search results")
+                    return False
+
+                # Wait for the results table to appear
+                table = page.locator("table")
+                if table.count() == 0:
+                    self._log_debug("No results table found")
+                    return False
+
                 # Find the first OP (opening) link in the results table
                 # Look for links with text "OP1" or "OP" in the table
                 op_link = page.locator("table a:has-text('OP1'), table a:has-text('OP')")
