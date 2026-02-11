@@ -69,6 +69,27 @@ class YoutubeScraper(ThemeScraper):
             )
             return False
 
+    def _normalize_show_name(self, show_name: str) -> str:
+        """
+        Normalize show name for better YouTube search results.
+        
+        Args:
+            show_name: Original show name
+            
+        Returns:
+            Normalized show name
+        """
+        # Remove year in parentheses (e.g., "Show (2017)" -> "Show")
+        import re
+        normalized = re.sub(r'\s*\(\d{4}\)\s*$', '', show_name)
+        
+        # Remove possessive apostrophes that might cause search issues
+        # "Marvel's" -> "Marvel" or "Marvels"
+        normalized = normalized.replace("'s ", " ")
+        normalized = normalized.replace("'", "")
+        
+        return normalized.strip()
+
     def _get_search_queries(self, show_name: str) -> list[str]:
         """
         Generate multiple search query variations for finding theme songs.
@@ -79,14 +100,26 @@ class YoutubeScraper(ThemeScraper):
         Returns:
             List of search query strings in priority order
         """
-        return [
-            f"{show_name} theme song",
-            f"{show_name} opening theme",
-            f"{show_name} intro theme",
-            f"{show_name} main theme",
-            f"{show_name} title sequence",
-            f"{show_name} op theme",
+        # Normalize the show name for better search results
+        normalized_name = self._normalize_show_name(show_name)
+        
+        queries = [
+            f"{normalized_name} theme song",
+            f"{normalized_name} opening theme",
+            f"{normalized_name} intro theme",
+            f"{normalized_name} main theme",
+            f"{normalized_name} title sequence",
+            f"{normalized_name} op theme",
         ]
+        
+        # If normalization changed the name, also try original name variants
+        if normalized_name != show_name:
+            queries.extend([
+                f"{show_name} theme song",
+                f"{show_name} opening theme",
+            ])
+        
+        return queries
 
     @retry_with_backoff(
         max_attempts=Config.MAX_RETRY_ATTEMPTS,
