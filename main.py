@@ -43,6 +43,12 @@ def main(
         False,
         "--dry-run",
         help="Simulate operations without downloading"
+    ),
+    timeout: int = typer.Option(
+        30,
+        "--timeout",
+        "-t",
+        help="Network timeout in seconds (default: 30)"
     )
 ):
     """
@@ -93,7 +99,7 @@ def main(
     validate_dependencies(console)
 
     try:
-        orchestrator = Orchestrator(console, force, dry_run, verbose)
+        orchestrator = Orchestrator(console, force, dry_run, verbose, timeout)
         orchestrator.process_directory(input_dir)
     except CriticalError as e:
         logger.error(f"Critical error: {str(e)}", exc_info=True)

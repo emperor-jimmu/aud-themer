@@ -1,6 +1,5 @@
 """Orchestration logic for theme song retrieval."""
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -11,6 +10,9 @@ from scrapers.tv_tunes import TelevisionTunesScraper
 from scrapers.anime_themes import AnimeThemesScraper
 from scrapers.themes_moe import ThemesMoeScraper
 from scrapers.youtube import YoutubeScraper
+from core.config import Config
+from core.rate_limiter import RateLimiter
+from core.logging_utils import StructuredLogger
 
 
 class CriticalError(Exception):
@@ -20,16 +22,13 @@ class CriticalError(Exception):
 class Orchestrator:
     """Orchestrates theme song retrieval across multiple sources."""
 
-    THEME_EXTENSIONS = ['.mp3', '.flac', '.wav']
-    DEFAULT_CONCURRENCY = 3  # Process 3 shows concurrently by default
-
     def __init__(
         self,
         console: Console,
         force: bool = False,
         dry_run: bool = False,
         verbose: bool = False,
-        max_concurrent: int = DEFAULT_CONCURRENCY
+        timeout: int = Config.DEFAULT_TIMEOUT_SEC
     ):
         """
         Initialize the orchestrator.
@@ -39,23 +38,22 @@ class Orchestrator:
             force: If True, overwrite existing theme files
             dry_run: If True, simulate operations without downloading
             verbose: If True, enable debug logging
-            max_concurrent: Maximum number of shows to process concurrently
+            timeout: Network timeout in seconds
         """
         self.console = console
         self.force = force
         self.dry_run = dry_run
         self.verbose = verbose
-        self.max_concurrent = max_concurrent
+        self.timeout = timeout
         self.scrapers: List[ThemeScraper] = []
         self.logger = logging.getLogger(__name__)
+        self.structured_logger = StructuredLogger(__name__)
+        self.rate_limiter = RateLimiter()
         self.results = {
             "success": 0,
             "skipped": 0,
             "failed": 0
         }
-        # Use threading.Lock for synchronous code
-        import threading
-        self._results_lock = threading.Lock()
 
         # Initialize scrapers in priority order
         self._initialize_default_scrapers()
@@ -71,9 +69,9 @@ class Orchestrator:
         4. YouTube (fallback for everything)
         """
         self.scrapers = [
-            TelevisionTunesScraper(self.console, self.verbose),
-            AnimeThemesScraper(self.console, self.verbose),
-            ThemesMoeScraper(self.console, self.verbose),
+            TelevisionTunesScraper(self.console, self.verbose, self.timeout),
+            AnimeThemesScraper(self.console, self.verbose, self.timeout),
+            ThemesMoeScraper(self.console, self.verbose, self.timeout),
             YoutubeScraper(self.console, self.verbose)
         ]
 
@@ -132,8 +130,7 @@ class Orchestrator:
                 if self.verbose:
                     import traceback
                     self.console.print(traceback.format_exc())
-                with self._results_lock:
-                    self.results["failed"] += 1
+                self.results["failed"] += 1
 
         self.display_summary()
 
@@ -181,7 +178,7 @@ class Orchestrator:
         """
         Check if a theme file already exists in the folder.
 
-        Checks for theme files with extensions: .mp3, .flac, .wav
+        Checks for theme files with extensions from Config.THEME_EXTENSIONS
 
         Args:
             folder: Path to series folder
@@ -189,7 +186,7 @@ class Orchestrator:
         Returns:
             Path to existing theme file, or None if not found
         """
-        for ext in self.THEME_EXTENSIONS:
+        for ext in Config.THEME_EXTENSIONS:
             theme_file = folder / f"theme{ext}"
             if theme_file.exists():
                 return theme_file
@@ -218,15 +215,13 @@ class Orchestrator:
             self.console.print(
                 f"[yellow]SKIPPED[/] {show_name} - Permission denied"
             )
-            with self._results_lock:
-                self.results["skipped"] += 1
+            self.results["skipped"] += 1
             return
         except OSError as exc:
             self.console.print(
                 f"[yellow]SKIPPED[/] {show_name} - Cannot access folder: {str(exc)}"
             )
-            with self._results_lock:
-                self.results["skipped"] += 1
+            self.results["skipped"] += 1
             return
 
         # Check if theme already exists
@@ -234,8 +229,7 @@ class Orchestrator:
 
         if existing_theme and not self.force:
             self.console.print(f"[yellow]SKIPPED[/] {show_name} - File exists")
-            with self._results_lock:
-                self.results["skipped"] += 1
+            self.results["skipped"] += 1
             return
 
         if self.dry_run:
@@ -260,6 +254,9 @@ class Orchestrator:
             source_name = scraper.get_source_name()
             self.console.print(f"  Trying {source_name}...", end="")
 
+            # Apply rate limiting before attempting scraper
+            self.rate_limiter.wait(source_name)
+
             try:
                 if scraper.search_and_download(show_name, theme_file):
                     self.console.print(f" [green]✓[/]")
@@ -267,8 +264,7 @@ class Orchestrator:
                         f"[green]SUCCESS[/] Source: {source_name} | "
                         f"File: {theme_file}"
                     )
-                    with self._results_lock:
-                        self.results["success"] += 1
+                    self.results["success"] += 1
                     return
                 else:
                     self.console.print(f" [red]✗[/]")
@@ -284,8 +280,7 @@ class Orchestrator:
                     self.console.print(
                         f"[red]ERROR[/] Disk space error: {str(exc)}"
                     )
-                    with self._results_lock:
-                        self.results["failed"] += 1
+                    self.results["failed"] += 1
                     return
                 elif exc.errno == errno.EACCES:
                     self.logger.warning(
@@ -313,8 +308,7 @@ class Orchestrator:
                     self.console.print(f"    Error: {str(exc)}")
 
         self.console.print(f"[red]FAILED[/] No sources found for {show_name}")
-        with self._results_lock:
-            self.results["failed"] += 1
+        self.results["failed"] += 1
 
     def display_summary(self) -> None:
         """Display results summary table."""

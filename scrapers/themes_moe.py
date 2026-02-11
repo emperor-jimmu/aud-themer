@@ -1,19 +1,33 @@
 """Themes.moe scraper implementation."""
 
-import subprocess
+import re
 import time
-import random
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from scrapers.base import ThemeScraper
 from core.utils import validate_file_size, retry_with_backoff
+from core.config import Config
+from core.ffmpeg_utils import convert_audio, FFmpegError
+from core.logging_utils import StructuredLogger
 
 
 class ThemesMoeScraper(ThemeScraper):
     """Scraper for Themes.moe using Playwright web automation."""
 
     BASE_URL = "https://themes.moe/"
-    TIMEOUT = 30000  # 30 seconds in milliseconds
+
+    def __init__(self, console=None, verbose=False, timeout=Config.DEFAULT_TIMEOUT_SEC):
+        """
+        Initialize Themes.moe scraper.
+
+        Args:
+            console: Rich console for output
+            verbose: Enable verbose logging
+            timeout: Network timeout in seconds
+        """
+        super().__init__(console, verbose)
+        self.timeout_ms = int(timeout * 1000)  # Convert to milliseconds
+        self.structured_logger = StructuredLogger(__name__)
 
     def search_and_download(self, show_name: str, output_path: Path) -> bool:
         """
@@ -26,22 +40,50 @@ class ThemesMoeScraper(ThemeScraper):
         Returns:
             True if download succeeded, False otherwise
         """
+        start_time = time.time()
+
         try:
             # Strip year from show name (e.g., "Show Name (2020)" -> "Show Name")
-            import re
             clean_name = re.sub(r'\s*\(\d{4}\)\s*$', '', show_name).strip()
-            return self._search_and_download_with_retry(clean_name, output_path)
-        except PlaywrightTimeoutError:
+
+            self.structured_logger.log_scraper_attempt("Themes.moe", show_name, started=True)
+            success = self._search_and_download_with_retry(clean_name, output_path)
+
+            duration = time.time() - start_time
+            if success:
+                file_size = output_path.stat().st_size
+                self.structured_logger.log_download(
+                    "Themes.moe", show_name, file_size, duration, str(output_path)
+                )
+                self.structured_logger.log_scraper_result(
+                    "Themes.moe", show_name, True, duration
+                )
+            else:
+                self.structured_logger.log_scraper_result(
+                    "Themes.moe", show_name, False, duration, "Search or download failed"
+                )
+
+            return success
+
+        except PlaywrightTimeoutError as exc:
+            duration = time.time() - start_time
             self._log_error("Playwright timeout error", exc_info=True)
+            self.structured_logger.log_scraper_result(
+                "Themes.moe", show_name, False, duration, f"Timeout: {str(exc)}"
+            )
             return False
-        except Exception as e:
-            self._log_error(f"Exception in search_and_download: {str(e)}", exc_info=True)
+        except Exception as exc:
+            duration = time.time() - start_time
+            self._log_error(f"Exception in search_and_download: {str(exc)}", exc_info=True)
+            self.structured_logger.log_scraper_result(
+                "Themes.moe", show_name, False, duration, str(exc)
+            )
             return False
 
     @retry_with_backoff(
-        max_attempts=3,
-        initial_delay=0.0,
-        backoff_factor=2.0,
+        max_attempts=Config.MAX_RETRY_ATTEMPTS,
+        initial_delay=Config.RETRY_INITIAL_DELAY_SEC,
+        backoff_factor=Config.RETRY_BACKOFF_FACTOR,
         exceptions=(PlaywrightTimeoutError,)
     )
     def _search_and_download_with_retry(self, show_name: str, output_path: Path) -> bool:
@@ -55,22 +97,27 @@ class ThemesMoeScraper(ThemeScraper):
         Returns:
             True if download succeeded, False otherwise
         """
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+        browser = None
+        page = None
 
-            # Enable Playwright tracing in verbose mode
-            if self.verbose:
-                page.on("console", lambda msg: self._log_debug(f"Browser console: {msg.text}"))
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
 
-            try:
+                # Enable Playwright tracing in verbose mode
+                if self.verbose:
+                    page.on("console", lambda msg: self._log_debug(f"Browser console: {msg.text}"))
+
                 self._log_debug(f"Navigating to {self.BASE_URL}")
 
                 # Navigate to homepage
-                page.goto(self.BASE_URL, timeout=self.TIMEOUT)
+                page.goto(self.BASE_URL, timeout=self.timeout_ms)
 
                 # Click the dropdown button to select "Anime Search" mode
-                dropdown_button = page.locator("button:has-text('MyAnimeList'), button:has-text('Anime Search')")
+                dropdown_button = page.locator(
+                    "button:has-text('MyAnimeList'), button:has-text('Anime Search')"
+                )
                 if dropdown_button.count() == 0:
                     self._log_debug("No search dropdown found on page")
                     return False
@@ -99,7 +146,7 @@ class ThemesMoeScraper(ThemeScraper):
                 # Perform search
                 search_input.first.fill(show_name)
                 search_input.first.press("Enter")
-                page.wait_for_load_state("networkidle", timeout=self.TIMEOUT)
+                page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
 
                 # Wait a bit for the page to update
                 page.wait_for_timeout(1000)
@@ -153,30 +200,29 @@ class ThemesMoeScraper(ThemeScraper):
                     temp_path = output_path.with_suffix('.temp')
                     output_path.rename(temp_path)
 
-                    result = subprocess.run(
-                        [
-                            "ffmpeg",
-                            "-i", str(temp_path),
-                            "-vn",
-                            "-acodec", "libmp3lame",
-                            "-b:a", "320k",
-                            "-y",
-                            str(output_path)
-                        ],
-                        capture_output=True,
-                        timeout=60,
-                        check=False
-                    )
+                    try:
+                        success, ffmpeg_error = convert_audio(temp_path, output_path)
 
-                    temp_path.unlink()
+                        if not success:
+                            error_msg = str(ffmpeg_error) if ffmpeg_error else "Unknown error"
+                            self._log_error(
+                                f"FFmpeg conversion failed: {error_msg}",
+                                exc_info=False
+                            )
+                            if self.verbose:
+                                self._log_debug(f"FFmpeg error: {error_msg}")
+                            return False
 
-                    if result.returncode != 0:
-                        if self.verbose:
-                            self._log_debug(f"FFmpeg stderr: {result.stderr.decode()}")
-                        return False
+                    finally:
+                        # Clean up temp file
+                        if temp_path.exists():
+                            try:
+                                temp_path.unlink()
+                            except OSError:
+                                pass
 
                 # Validate file size
-                if not validate_file_size(output_path):
+                if not validate_file_size(output_path, Config.MIN_FILE_SIZE_BYTES):
                     self._log_debug(f"File too small: {output_path.stat().st_size} bytes")
                     output_path.unlink()
                     return False
@@ -184,10 +230,25 @@ class ThemesMoeScraper(ThemeScraper):
                 self._log_debug(f"Download successful: {output_path}")
                 return True
 
-            finally:
-                browser.close()
-                # Rate limiting delay
-                time.sleep(random.uniform(1, 3))
+        finally:
+            # Ensure browser is always closed
+            if page:
+                try:
+                    page.close()
+                except Exception:
+                    pass
+            if browser:
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+
+            # Rate limiting delay
+            import random
+            time.sleep(random.uniform(
+                Config.RATE_LIMIT_MIN_DELAY_SEC,
+                Config.RATE_LIMIT_MAX_DELAY_SEC
+            ))
 
     def get_source_name(self) -> str:
         """

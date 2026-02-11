@@ -1,15 +1,29 @@
 """YouTube fallback scraper implementation using yt-dlp."""
 
+import time
 from pathlib import Path
 
 import yt_dlp
 
 from scrapers.base import ThemeScraper
 from core.utils import retry_with_backoff
+from core.config import Config
+from core.logging_utils import StructuredLogger
 
 
 class YoutubeScraper(ThemeScraper):
     """Scraper for YouTube as a fallback source."""
+
+    def __init__(self, console=None, verbose=False):
+        """
+        Initialize YouTube scraper.
+
+        Args:
+            console: Rich console for output
+            verbose: Enable verbose logging
+        """
+        super().__init__(console, verbose)
+        self.structured_logger = StructuredLogger(__name__)
 
     def search_and_download(self, show_name: str, output_path: Path) -> bool:
         """
@@ -22,7 +36,38 @@ class YoutubeScraper(ThemeScraper):
         Returns:
             True if download succeeded, False otherwise
         """
-        return self._search_and_download_with_retry(show_name, output_path)
+        start_time = time.time()
+
+        try:
+            self.structured_logger.log_scraper_attempt("YouTube", show_name, started=True)
+            success = self._search_and_download_with_retry(show_name, output_path)
+
+            duration = time.time() - start_time
+            if success:
+                file_size = output_path.stat().st_size
+                self.structured_logger.log_download(
+                    "YouTube", show_name, file_size, duration, str(output_path)
+                )
+                self.structured_logger.log_scraper_result(
+                    "YouTube", show_name, True, duration
+                )
+            else:
+                self.structured_logger.log_scraper_result(
+                    "YouTube", show_name, False, duration, "All search queries failed"
+                )
+
+            return success
+
+        except Exception as exc:
+            duration = time.time() - start_time
+            self._log_error(
+                f"YouTube failed for '{show_name}': {str(exc)}",
+                exc_info=True
+            )
+            self.structured_logger.log_scraper_result(
+                "YouTube", show_name, False, duration, str(exc)
+            )
+            return False
 
     def _get_search_queries(self, show_name: str) -> list[str]:
         """
@@ -44,15 +89,9 @@ class YoutubeScraper(ThemeScraper):
         ]
 
     @retry_with_backoff(
-        max_attempts=3,
-        initial_delay=0.0,
-        backoff_factor=2.0,
-        exceptions=(yt_dlp.utils.DownloadError,)
-    )
-    @retry_with_backoff(
-        max_attempts=3,
-        initial_delay=0.0,
-        backoff_factor=2.0,
+        max_attempts=Config.MAX_RETRY_ATTEMPTS,
+        initial_delay=Config.RETRY_INITIAL_DELAY_SEC,
+        backoff_factor=Config.RETRY_BACKOFF_FACTOR,
         exceptions=(yt_dlp.utils.DownloadError,)
     )
     def _search_and_download_with_retry(self, show_name: str, output_path: Path) -> bool:
@@ -68,10 +107,10 @@ class YoutubeScraper(ThemeScraper):
         """
         # Try multiple search query variations
         queries = self._get_search_queries(show_name)
-        
+
         for query in queries:
             self._log_debug(f"Trying YouTube search query: {query}")
-            
+
             try:
                 # Configure yt-dlp options for info extraction
                 info_opts = {
@@ -84,23 +123,24 @@ class YoutubeScraper(ThemeScraper):
                 # First, extract video info to check duration
                 with yt_dlp.YoutubeDL(info_opts) as ydl:
                     info = ydl.extract_info(query, download=False)
-                    
+
                     # Handle search results
                     if 'entries' in info:
                         if not info['entries']:
                             self._log_debug("No results found, trying next query")
                             continue
                         info = info['entries'][0]
-                    
+
                     duration = info.get('duration', 0)
-                    
-                    # Skip if video is longer than 10 minutes (600 seconds)
-                    if duration > 600:
+
+                    # Skip if video is longer than max duration
+                    if duration > Config.MAX_VIDEO_DURATION_SEC:
                         self._log_debug(
-                            f"Video too long ({duration}s > 600s), trying next query"
+                            f"Video too long ({duration}s > {Config.MAX_VIDEO_DURATION_SEC}s), "
+                            f"trying next query"
                         )
                         continue
-                    
+
                     self._log_debug(f"Video duration: {duration}s (within limit)")
 
                 # Configure yt-dlp options for download
@@ -148,19 +188,22 @@ class YoutubeScraper(ThemeScraper):
                 if final_path != output_path:
                     final_path.rename(output_path)
 
-                # Validate file size (>500KB)
-                if output_path.stat().st_size < 500_000:
-                    self._log_debug(f"File too small: {output_path.stat().st_size} bytes")
+                # Validate file size
+                if output_path.stat().st_size < Config.MIN_FILE_SIZE_BYTES:
+                    self._log_debug(
+                        f"File too small: {output_path.stat().st_size} bytes "
+                        f"(min: {Config.MIN_FILE_SIZE_BYTES})"
+                    )
                     output_path.unlink()
                     continue
 
                 self._log_debug(f"Download successful: {output_path}")
                 return True
-                
+
             except Exception as exc:
                 self._log_debug(f"Query '{query}' failed: {str(exc)}")
                 continue
-        
+
         # All queries failed
         self._log_error(
             f"YouTube download failed for '{show_name}': All search queries exhausted",

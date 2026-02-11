@@ -2,388 +2,589 @@
 
 ## 1. Overview
 
-This spec documents a comprehensive production-ready code review of the Show Theme CLI codebase. The review identifies issues across architecture, code quality, testing, logging, error handling, and operational concerns, prioritized by severity.
+This spec documents a comprehensive production-ready code review of the Show Theme CLI codebase, identifying issues across architecture, code quality, testing, logging, and operational concerns.
 
 ## 2. Critical Issues (Must Fix)
 
-### 2.1 Security & Resource Management
+### 2.1 Duplicate Retry Decorators
 
-**Issue**: Subprocess injection vulnerability in anime_themes.py
+**Severity**: Critical  
+**Files**: `scrapers/tv_tunes.py` (lines 48-56), `scrapers/youtube.py` (lines 42-50)
 
-- **Location**: `scrapers/anime_themes.py:27`
-- **Problem**: Regex pattern `r'\s*\(\d{4}\)\s*` is incomplete (missing closing delimiter)
-- **Impact**: Syntax error prevents module from loading
-- **Fix**: Complete the regex pattern: `r'\s*\(\d{4}\)\s*$'`
+The same `@retry_with_backoff` decorator is applied twice to the same function, causing exponential retry behavior (9 attempts instead of 3).
 
-**Issue**: No timeout on subprocess calls
+**Impact**:
 
-- **Location**: `scrapers/tv_tunes.py:115`, `scrapers/anime_themes.py:185`
-- **Problem**: FFmpeg subprocess has 60s timeout but no resource cleanup on timeout
-- **Impact**: Zombie processes, resource leaks
-- **Fix**: Add proper cleanup in timeout exception handlers
+- Unnecessary network load and delays
+- Confusing retry behavior for debugging
+- Potential rate limiting issues
 
-**Issue**: Browser resource leak in error paths
+**Acceptance Criteria**:
 
-- **Location**: `scrapers/tv_tunes.py:48-150`
-- **Problem**: Playwright browser not closed if exception occurs before finally block
-- **Impact**: Memory leaks, file descriptor exhaustion
-- **Fix**: Use context manager or ensure browser.close() in all paths
+- Remove duplicate decorators from both files
+- Verify retry behavior is as expected (3 attempts max)
+- Add unit tests to validate retry count
 
-### 2.2 Concurrency Issues
+### 2.2 Incomplete Regex Pattern in anime_themes.py
 
-**Issue**: Race condition in results tracking
+**Severity**: Critical  
+**Files**: `scrapers/anime_themes.py` (line 31)
 
-- **Location**: `core/orchestrator.py:108-110`
-- **Problem**: `self.results` dict modified without lock in `process_show()` but has `_results_lock` that's only used in async wrapper
-- **Impact**: Lost updates, incorrect counts in concurrent execution
-- **Fix**: Use lock consistently in all result modifications
+The regex pattern `r'\s*\(\d{4}\)\s*` is incomplete and missing the closing delimiter, causing a syntax error.
 
-**Issue**: Async/sync mixing anti-pattern
+**Impact**:
 
-- **Location**: `core/orchestrator.py:108-150`
-- **Problem**: `process_show()` is synchronous but called via `asyncio.to_thread()`, scrapers are all synchronous
-- **Impact**: Thread pool exhaustion, poor performance
-- **Fix**: Either make scrapers truly async or remove async orchestration
+- Code will not run
+- AnimeThemes scraper is completely broken
 
-### 2.3 Error Handling Gaps
+**Acceptance Criteria**:
 
-**Issue**: Silent exception swallowing
+- Fix regex pattern to properly strip year from show names
+- Add unit test for year stripping functionality
+- Verify AnimeThemes scraper works end-to-end
 
-- **Location**: `scrapers/tv_tunes.py:42-45`, `scrapers/youtube.py:67`
-- **Problem**: Broad `except Exception` returns False without logging
-- **Impact**: Debugging impossible, silent failures
-- **Fix**: Log exceptions before returning False
+### 2.3 Missing Resource Cleanup in Scrapers
 
-**Issue**: Incomplete error context
+**Severity**: High  
+**Files**: `scrapers/tv_tunes.py`, `scrapers/themes_moe.py`
 
-- **Location**: `core/orchestrator.py:195-200`
-- **Problem**: OSError handling checks string content instead of errno
-- **Impact**: Fragile, locale-dependent error detection
-- **Fix**: Use `e.errno == errno.ENOSPC` or `errno.EDQUOT`
+Playwright browser instances may not be properly closed if exceptions occur during page operations, leading to resource leaks.
 
-## 3. High Priority Issues (Should Fix)
+**Impact**:
 
-### 3.1 Code Smells & Design Issues
+- Memory leaks in long-running operations
+- File descriptor exhaustion
+- Zombie browser processes
 
-**Issue**: God class anti-pattern
+**Acceptance Criteria**:
 
-- **Location**: `core/orchestrator.py:Orchestrator`
-- **Problem**: 250+ lines, handles scanning, processing, display, async coordination
-- **Impact**: Hard to test, maintain, extend
-- **Fix**: Extract ResultsTracker, DirectoryScanner, ProgressReporter classes
+- Ensure browser cleanup happens in finally blocks
+- Add context manager support for browser lifecycle
+- Add integration tests that verify cleanup on exceptions
 
-**Issue**: Magic numbers scattered throughout
+### 2.4 Hardcoded Magic Numbers
 
-- **Location**: Multiple files
-- **Examples**:
-  - `500_000` (file size threshold) - appears in 5 different files
-  - `30000` (timeout) - tv_tunes.py
-  - `30.0` (timeout) - anime_themes.py
-  - `60.0` (download timeout) - anime_themes.py
-- **Impact**: Inconsistent behavior, hard to configure
-- **Fix**: Define constants in config module or class-level
+**Severity**: Medium  
+**Files**: Multiple files
 
-**Issue**: Tight coupling to Rich Console
+Magic numbers scattered throughout codebase:
 
-- **Location**: All scraper classes
-- **Problem**: Console passed to scrapers, mixed concerns (business logic + presentation)
-- **Impact**: Hard to test, can't use scrapers without Rich
-- **Fix**: Use logging for scrapers, console only in orchestrator
+- `500_000` (file size threshold) - appears in 5+ locations
+- `30000` (timeout) - appears in multiple scrapers
+- `320k` (audio bitrate) - appears in FFmpeg calls
+- `600` (max video duration) - YouTube scraper
 
-**Issue**: Inconsistent retry strategies
+**Impact**:
 
-- **Location**: Multiple scrapers
-- **Problem**:
-  - tv_tunes: retries only PlaywrightTimeoutError
-  - anime_themes: retries httpx timeouts
-  - youtube: retries yt_dlp.DownloadError
-  - Different backoff configs (0s initial delay everywhere)
-- **Impact**: Inconsistent reliability
-- **Fix**: Centralize retry configuration, use consistent strategy
+- Difficult to maintain and update
+- Inconsistent behavior if values diverge
+- Poor code readability
 
-### 3.2 Testing Gaps
+**Acceptance Criteria**:
 
-**Issue**: No integration tests for actual scrapers
+- Extract all magic numbers to class constants or config
+- Document the reasoning behind each threshold
+- Ensure consistency across all usages
 
-- **Location**: `tests/integration/` (empty or minimal)
-- **Problem**: Unit tests use mocks, no real scraper validation
-- **Impact**: Can't verify scrapers work with real sites
-- **Fix**: Add integration tests with VCR.py for HTTP recording
+## 3. High Priority Issues
 
-**Issue**: Property tests don't test actual properties
+### 3.1 Insufficient Error Context in Logging
 
-- **Location**: `tests/properties/test_orchestrator_properties.py`
-- **Problem**: Tests use mocks, don't verify real invariants
-- **Example**: Property 2 "Directory Scanning Completeness" creates folders and counts them - this is a unit test, not a property
-- **Impact**: False confidence in correctness
-- **Fix**: Test real properties like "retry always succeeds or exhausts attempts", "file operations are idempotent"
+**Severity**: High  
+**Files**: All scraper files
 
-**Issue**: Missing edge case tests
+Error logs lack contextual information needed for production debugging:
 
-- **Location**: Test suite
-- **Missing**:
-  - Unicode in show names
-  - Very long file paths (>260 chars on Windows)
-  - Concurrent access to same folder
-  - Network interruption mid-download
-  - Partial file writes
-- **Fix**: Add edge case test suite
+- No request IDs or correlation IDs
+- No timing information
+- No user/session context
+- Limited structured logging
 
-**Issue**: No performance tests
+**Impact**:
 
-- **Location**: Test suite
-- **Problem**: No tests for concurrency limits, memory usage, large directories
-- **Impact**: Can't verify performance characteristics
-- **Fix**: Add performance test suite with benchmarks
+- Difficult to debug production issues
+- Cannot trace requests across components
+- Poor observability
 
-### 3.3 Logging & Observability
+**Acceptance Criteria**:
 
-**Issue**: Inconsistent logging levels
+- Add structured logging with context fields
+- Include timing information for operations
+- Add correlation IDs for request tracing
+- Log key decision points (which scraper succeeded, why others failed)
 
-- **Location**: All scrapers
-- **Problem**:
-  - `_log_debug()` uses console output, not logger
-  - `_log_error()` uses logger
-  - No INFO or WARNING levels
-- **Impact**: Can't filter logs properly, verbose mode required for any detail
-- **Fix**: Use standard logging levels consistently
+### 3.2 No Rate Limiting or Backoff Between Sources
 
-**Issue**: Missing structured logging
+**Severity**: High  
+**Files**: `core/orchestrator.py`
 
-- **Location**: All files
-- **Problem**: String formatting in logs, no context fields
-- **Impact**: Hard to parse, search, aggregate logs
-- **Fix**: Use structured logging (JSON) with context fields
+The orchestrator tries all scrapers in rapid succession without delays, potentially triggering rate limits or appearing as abuse.
 
-**Issue**: No metrics or telemetry
+**Impact**:
 
-- **Location**: Entire codebase
-- **Problem**: No timing, success rates, source performance tracking
-- **Impact**: Can't optimize, identify bottlenecks
-- **Fix**: Add metrics collection (timing, counts, errors by source)
+- Risk of IP bans from sources
+- Potential service degradation
+- Poor citizenship behavior
 
-**Issue**: Error log file naming collision
+**Acceptance Criteria**:
 
-- **Location**: `main.py:60`
-- **Problem**: `errors-{timestamp}.log` created per run, no rotation
-- **Impact**: Disk space exhaustion over time
-- **Fix**: Use rotating file handler, configurable log directory
+- Add configurable delays between scraper attempts
+- Implement exponential backoff for repeated failures
+- Add rate limiting per source
+- Document rate limit policies for each source
 
-## 4. Medium Priority Issues (Nice to Have)
+### 3.3 Incomplete FFmpeg Error Handling
 
-### 4.1 Code Quality
+**Severity**: High  
+**Files**: `scrapers/tv_tunes.py`, `scrapers/anime_themes.py`
 
-**Issue**: Missing type hints in many places
+FFmpeg errors are logged but not properly categorized. Different failure modes (missing codec, corrupted input, disk space) are treated identically.
 
-- **Location**: Multiple files
-- **Examples**:
-  - `core/utils.py:retry_with_backoff` - decorator return type
-  - `scrapers/tv_tunes.py:_find_best_match` - return type
-- **Impact**: Reduced IDE support, type checking
-- **Fix**: Add complete type hints, enable mypy
+**Impact**:
 
-**Issue**: Inconsistent docstring style
+- Cannot distinguish transient from permanent failures
+- Poor user feedback
+- Difficult to debug conversion issues
 
-- **Location**: All files
-- **Problem**: Mix of Google-style and incomplete docstrings
-- **Impact**: Reduced documentation quality
-- **Fix**: Standardize on one style (Google or NumPy)
+**Acceptance Criteria**:
 
-**Issue**: Long methods
+- Parse FFmpeg stderr for specific error types
+- Provide actionable error messages to users
+- Retry transient errors, fail fast on permanent ones
+- Add tests for different FFmpeg failure scenarios
 
-- **Location**: Multiple files
-- **Examples**:
-  - `tv_tunes.py:_search_and_download_with_retry` - 110 lines
-  - `orchestrator.py:process_show` - 80 lines
-- **Impact**: Hard to understand, test
-- **Fix**: Extract helper methods
+### 3.4 No Timeout Configuration
 
-**Issue**: Duplicate code
+**Severity**: High  
+**Files**: Multiple scrapers
 
-- **Location**: All scrapers
-- **Problem**: FFmpeg audio extraction duplicated in tv_tunes and anime_themes
-- **Impact**: Maintenance burden, inconsistency
-- **Fix**: Extract to shared utility function
+Timeouts are hardcoded and cannot be adjusted for slow networks or large files.
 
-**Issue**: Poor variable naming
+**Impact**:
 
-- **Location**: Multiple files
-- **Examples**:
-  - `p` for playwright (tv_tunes.py:48)
-  - `e` for exception (multiple places)
-  - `f` for file handle (multiple places)
-- **Impact**: Reduced readability
-- **Fix**: Use descriptive names
+- Fails on slow connections
+- Cannot optimize for different environments
+- Poor user experience in constrained networks
 
-### 4.2 Configuration & Flexibility
+**Acceptance Criteria**:
 
-**Issue**: Hardcoded scraper priority
+- Make timeouts configurable via CLI or config file
+- Provide sensible defaults
+- Document timeout recommendations
+- Add tests with various timeout scenarios
 
-- **Location**: `core/orchestrator.py:68-75`
-- **Problem**: Source priority hardcoded in method
-- **Impact**: Can't customize without code changes
-- **Fix**: Make priority configurable via config file
+## 4. Medium Priority Issues
 
-**Issue**: No configuration file support
+### 4.1 Tight Coupling Between Orchestrator and Scrapers
 
-- **Location**: Entire codebase
-- **Problem**: All settings via CLI args or hardcoded
-- **Impact**: Can't persist preferences, share configs
-- **Fix**: Add config file support (YAML/TOML)
+**Severity**: Medium  
+**Files**: `core/orchestrator.py` (lines 52-59)
 
-**Issue**: Hardcoded output format
+The orchestrator directly instantiates specific scraper classes, violating dependency injection principles.
 
-- **Location**: All scrapers
-- **Problem**: Always outputs MP3 at 320kbps
-- **Impact**: Can't customize quality/format
-- **Fix**: Make format and quality configurable
+**Impact**:
 
-**Issue**: No plugin system
+- Difficult to test in isolation
+- Hard to add/remove scrapers dynamically
+- Tight coupling reduces flexibility
 
-- **Location**: `core/orchestrator.py`
-- **Problem**: Can't add scrapers without modifying code
-- **Impact**: Hard to extend
-- **Fix**: Add plugin discovery mechanism
+**Acceptance Criteria**:
 
-### 4.3 User Experience
+- Use dependency injection for scraper initialization
+- Allow scrapers to be configured externally
+- Support dynamic scraper registration
+- Improve testability with mock scrapers
 
-**Issue**: No progress indication for long operations
+### 4.2 Inconsistent Error Handling Patterns
 
-- **Location**: All scrapers
-- **Problem**: Downloads can take minutes with no feedback
-- **Impact**: Appears frozen
-- **Fix**: Add progress bars for downloads
+**Severity**: Medium  
+**Files**: All scraper files
 
-**Issue**: Poor error messages
+Different scrapers handle errors differently:
 
-- **Location**: Multiple files
-- **Examples**:
-  - "No sources found" - doesn't say which sources were tried
-  - "Download failed" - no reason given
-- **Impact**: Users can't troubleshoot
-- **Fix**: Provide actionable error messages
+- Some catch broad exceptions, others specific ones
+- Inconsistent logging patterns
+- Different retry strategies
 
-**Issue**: No resume capability
+**Impact**:
 
-- **Location**: Entire codebase
-- **Problem**: If interrupted, must start over
-- **Impact**: Wastes time on large directories
-- **Fix**: Add state file to track progress
+- Unpredictable behavior
+- Difficult to maintain
+- Inconsistent user experience
 
-## 5. Low Priority Issues (Polish)
+**Acceptance Criteria**:
 
-### 5.1 Documentation
+- Standardize error handling across all scrapers
+- Create error handling guidelines
+- Implement common error handling utilities
+- Add tests for error handling consistency
 
-**Issue**: Missing architecture documentation
+### 4.3 No Progress Indication for Long Operations
 
-- **Location**: Repository
-- **Problem**: No docs explaining design decisions, extension points
-- **Impact**: Hard for contributors to understand
-- **Fix**: Add ARCHITECTURE.md
+**Severity**: Medium  
+**Files**: `core/orchestrator.py`, scraper files
 
-**Issue**: Incomplete README
+Long-running operations (downloads, conversions) provide no progress feedback.
 
-- **Location**: Repository (assumed)
-- **Problem**: No troubleshooting section, FAQ
-- **Impact**: Repeated support questions
-- **Fix**: Expand README with common issues
+**Impact**:
 
-**Issue**: No API documentation
+- Poor user experience
+- Appears frozen during long operations
+- Cannot estimate completion time
 
-- **Location**: Code
-- **Problem**: No generated API docs
-- **Impact**: Hard to use as library
-- **Fix**: Add Sphinx documentation
+**Acceptance Criteria**:
 
-### 5.2 Development Experience
+- Add progress bars for downloads
+- Show conversion progress
+- Display estimated time remaining
+- Add tests for progress reporting
 
-**Issue**: No pre-commit hooks
+### 4.4 Insufficient Input Validation
 
-- **Location**: Repository
-- **Problem**: No automated linting, formatting
-- **Impact**: Inconsistent code style
-- **Fix**: Add pre-commit config with black, isort, pylint
+**Severity**: Medium  
+**Files**: `main.py`, `core/orchestrator.py`
 
-**Issue**: No CI/CD configuration
+Limited validation of user inputs:
 
-- **Location**: Repository
-- **Problem**: No automated testing, releases
-- **Impact**: Manual testing burden
-- **Fix**: Add GitHub Actions workflow
+- No validation of show name format
+- No checks for extremely long paths
+- No validation of output path writability
 
-**Issue**: Missing development documentation
+**Impact**:
 
-- **Location**: Repository
-- **Problem**: No CONTRIBUTING.md, development setup guide
-- **Impact**: Hard for new contributors
-- **Fix**: Add contributor documentation
+- Cryptic errors for invalid inputs
+- Potential security issues
+- Poor user experience
 
-## 6. Positive Observations
+**Acceptance Criteria**:
 
-### 6.1 Strengths
+- Validate all user inputs at entry points
+- Provide clear error messages for invalid inputs
+- Add path length and character validation
+- Test with malformed inputs
 
-- **Good separation of concerns**: Scrapers are independent, swappable
-- **Comprehensive error handling**: Most error cases are handled
-- **Property-based testing**: Good use of Hypothesis for validation
-- **Rich console output**: Professional, user-friendly interface
-- **Dependency validation**: Checks for FFmpeg and Playwright upfront
-- **Idempotent operations**: Safe to re-run
-- **Async support**: Foundation for concurrent processing
+### 4.5 Missing Concurrency Controls
 
-### 6.2 Best Practices Followed
+**Severity**: Medium  
+**Files**: `core/orchestrator.py`
 
-- **Abstract base class**: Good use of ABC for scraper interface
-- **Type hints**: Most functions have type annotations
-- **Docstrings**: Most functions documented
-- **Test markers**: Good test categorization
-- **Retry logic**: Exponential backoff implemented
-- **File validation**: Size checks prevent corrupt downloads
+The orchestrator has a `max_concurrent` parameter but processes shows sequentially. The concurrency infrastructure is incomplete.
 
-## 7. Acceptance Criteria
+**Impact**:
 
-### 7.1 Critical Issues Fixed
+- Slower than necessary processing
+- Misleading parameter
+- Wasted opportunity for parallelization
 
-- [ ] Regex syntax error in anime_themes.py fixed
-- [ ] Browser resource leaks eliminated
-- [ ] Race conditions in results tracking resolved
-- [ ] Async/sync architecture clarified and consistent
-- [ ] All exceptions logged before swallowing
+**Acceptance Criteria**:
 
-### 7.2 High Priority Issues Addressed
+- Implement actual concurrent processing or remove the parameter
+- Add proper synchronization for shared state
+- Test concurrent execution
+- Document concurrency behavior
 
-- [ ] Magic numbers extracted to constants
-- [ ] Orchestrator refactored (< 150 lines)
-- [ ] Retry strategies unified
-- [ ] Integration tests added for scrapers
-- [ ] Structured logging implemented
-- [ ] Metrics collection added
+## 5. Low Priority Issues
 
-### 7.3 Code Quality Improved
+### 5.1 Inconsistent Naming Conventions
 
-- [ ] Type hints complete, mypy passing
-- [ ] Docstrings standardized
-- [ ] Long methods refactored (< 50 lines)
-- [ ] Duplicate code eliminated
-- [ ] Configuration file support added
+**Severity**: Low  
+**Files**: Multiple files
 
-### 7.4 Testing Enhanced
+Inconsistent naming:
 
-- [ ] Test coverage > 80%
-- [ ] Property tests verify real invariants
-- [ ] Edge case tests added
-- [ ] Performance tests added
+- `_log_debug` vs `_log_error` (underscore prefix)
+- `search_and_download` vs `_search_and_download_with_retry`
+- Mixed use of `show_name` vs `anime_name`
 
-### 7.5 Documentation Complete
+**Impact**:
 
-- [ ] ARCHITECTURE.md added
-- [ ] README expanded with troubleshooting
-- [ ] API documentation generated
-- [ ] CONTRIBUTING.md added
+- Reduced code readability
+- Confusion about public vs private methods
 
-## 8. Out of Scope
+**Acceptance Criteria**:
 
-- Rewriting in another language
-- Adding GUI interface
-- Supporting additional media formats beyond audio
-- Implementing custom audio processing beyond format conversion
-- Building web service/API
+- Standardize naming conventions
+- Document naming guidelines
+- Apply consistently across codebase
+
+### 5.2 Incomplete Type Hints
+
+**Severity**: Low  
+**Files**: Multiple files
+
+Some functions lack complete type hints, particularly for complex return types and optional parameters.
+
+**Impact**:
+
+- Reduced IDE support
+- Harder to catch type errors
+- Less self-documenting code
+
+**Acceptance Criteria**:
+
+- Add complete type hints to all public methods
+- Use Optional, Union, and other typing constructs appropriately
+- Run mypy or similar type checker
+- Fix all type errors
+
+### 5.3 Missing Docstring Details
+
+**Severity**: Low  
+**Files**: Multiple files
+
+While most functions have docstrings, many lack:
+
+- Raises sections for exceptions
+- Examples for complex functions
+- Return value details
+
+**Impact**:
+
+- Harder to understand expected behavior
+- Incomplete API documentation
+
+**Acceptance Criteria**:
+
+- Add Raises sections to all docstrings
+- Include examples for complex functions
+- Document all return value possibilities
+- Generate API documentation
+
+### 5.4 Test Coverage Gaps
+
+**Severity**: Low  
+**Files**: Test suite
+
+Missing test coverage for:
+
+- Edge cases in retry logic
+- All FFmpeg error scenarios
+- Concurrent execution paths
+- Rate limiting behavior
+
+**Impact**:
+
+- Bugs may slip through
+- Refactoring is riskier
+- Less confidence in changes
+
+**Acceptance Criteria**:
+
+- Achieve >85% code coverage
+- Add tests for all identified gaps
+- Add integration tests for end-to-end flows
+- Document testing strategy
+
+### 5.5 No Performance Monitoring
+
+**Severity**: Low  
+**Files**: All files
+
+No instrumentation for performance monitoring:
+
+- No timing metrics
+- No success/failure rates
+- No source performance comparison
+
+**Impact**:
+
+- Cannot identify performance bottlenecks
+- No data for optimization decisions
+- Cannot track degradation over time
+
+**Acceptance Criteria**:
+
+- Add timing instrumentation
+- Log performance metrics
+- Create performance dashboard
+- Set performance baselines
+
+## 6. Testing Quality Issues
+
+### 6.1 Limited Property-Based Test Coverage
+
+**Severity**: Medium  
+**Files**: `tests/properties/`
+
+Property-based tests exist but don't cover:
+
+- Scraper search/download properties
+- Retry behavior properties
+- Concurrent execution properties
+- Error recovery properties
+
+**Acceptance Criteria**:
+
+- Add property tests for scraper behavior
+- Test retry properties (idempotency, max attempts)
+- Test concurrent execution properties
+- Increase Hypothesis examples to 100
+
+### 6.2 Mock Overuse in Unit Tests
+
+**Severity**: Low  
+**Files**: `tests/unit/`
+
+Heavy reliance on mocks may hide integration issues. Some tests mock too much, testing the mocks rather than the code.
+
+**Acceptance Criteria**:
+
+- Balance unit tests with integration tests
+- Use real objects where practical
+- Add more end-to-end tests
+- Document when mocking is appropriate
+
+## 7. Security Considerations
+
+### 7.1 No Input Sanitization for Shell Commands
+
+**Severity**: High  
+**Files**: FFmpeg subprocess calls
+
+Show names are passed to FFmpeg without sanitization, potential command injection risk.
+
+**Impact**:
+
+- Security vulnerability
+- Potential arbitrary code execution
+
+**Acceptance Criteria**:
+
+- Sanitize all inputs passed to subprocess
+- Use subprocess argument lists (not shell=True)
+- Add security tests with malicious inputs
+- Document security considerations
+
+### 7.2 No HTTPS Verification Configuration
+
+**Severity**: Medium  
+**Files**: `scrapers/anime_themes.py`
+
+HTTPS certificate verification is not explicitly configured, relying on defaults.
+
+**Impact**:
+
+- Potential MITM attacks
+- Unclear security posture
+
+**Acceptance Criteria**:
+
+- Explicitly enable certificate verification
+- Add configuration for custom CA bundles
+- Document security settings
+- Test with invalid certificates
+
+## 8. Operational Concerns
+
+### 8.1 No Health Check Mechanism
+
+**Severity**: Medium  
+**Files**: N/A (missing feature)
+
+No way to verify dependencies are working before processing.
+
+**Impact**:
+
+- Fails late in processing
+- Wastes time on doomed operations
+
+**Acceptance Criteria**:
+
+- Add health check command
+- Verify all dependencies before processing
+- Test connectivity to sources
+- Provide actionable diagnostics
+
+### 8.2 Insufficient Logging for Production Debugging
+
+**Severity**: High  
+**Files**: All files
+
+Current logging is minimal and not structured for production use.
+
+**Impact**:
+
+- Difficult to debug production issues
+- Cannot track down failures
+- Poor operational visibility
+
+**Acceptance Criteria**:
+
+- Add structured logging (JSON format option)
+- Include request/response details
+- Log all decision points
+- Add log levels for different verbosity
+
+### 8.3 No Metrics or Telemetry
+
+**Severity**: Low  
+**Files**: N/A (missing feature)
+
+No metrics collection for operational monitoring.
+
+**Impact**:
+
+- Cannot track success rates
+- No visibility into performance
+- Cannot detect degradation
+
+**Acceptance Criteria**:
+
+- Add metrics collection
+- Track success/failure rates per source
+- Monitor processing times
+- Export metrics in standard format
+
+## 9. Documentation Gaps
+
+### 9.1 Missing Architecture Documentation
+
+**Severity**: Low  
+**Files**: Documentation
+
+No high-level architecture documentation explaining design decisions.
+
+**Acceptance Criteria**:
+
+- Document architecture decisions
+- Explain scraper priority order
+- Document error handling strategy
+- Create architecture diagrams
+
+### 9.2 Incomplete Troubleshooting Guide
+
+**Severity**: Low  
+**Files**: Documentation
+
+No troubleshooting guide for common issues.
+
+**Acceptance Criteria**:
+
+- Document common failure scenarios
+- Provide troubleshooting steps
+- Include FAQ section
+- Add debugging tips
+
+## 10. Success Criteria
+
+This code review is complete when:
+
+1. All critical issues are fixed and tested
+2. High priority issues have remediation plans
+3. Medium priority issues are documented for future work
+4. Low priority issues are tracked in backlog
+5. Security issues are addressed
+6. Operational concerns have mitigation strategies
+7. Test coverage is improved
+8. Documentation is updated
+
+## 11. Out of Scope
+
+The following are explicitly out of scope for this review:
+
+- Complete rewrite of the codebase
+- Adding new features or scrapers
+- Performance optimization beyond critical issues
+- UI/UX improvements
+- Internationalization
+- Database integration

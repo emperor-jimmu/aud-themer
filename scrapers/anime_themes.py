@@ -1,7 +1,7 @@
 """AnimeThemes.moe API scraper implementation."""
 
 import re
-import subprocess
+import time
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -10,13 +10,29 @@ import httpx
 
 from scrapers.base import ThemeScraper
 from core.utils import retry_with_backoff
+from core.config import Config
+from core.ffmpeg_utils import convert_audio, FFmpegError
+from core.logging_utils import StructuredLogger
+from core.security import sanitize_for_subprocess
 
 
 class AnimeThemesScraper(ThemeScraper):
     """Scraper for AnimeThemes.moe API."""
 
     BASE_URL = "https://api.animethemes.moe"
-    TIMEOUT = 30.0
+
+    def __init__(self, console=None, verbose=False, timeout=Config.DEFAULT_TIMEOUT_SEC):
+        """
+        Initialize AnimeThemes scraper.
+
+        Args:
+            console: Rich console for output
+            verbose: Enable verbose logging
+            timeout: Network timeout in seconds
+        """
+        super().__init__(console, verbose)
+        self.timeout = float(timeout)
+        self.structured_logger = StructuredLogger(__name__)
 
     def search_and_download(self, show_name: str, output_path: Path) -> bool:
         """
@@ -29,16 +45,23 @@ class AnimeThemesScraper(ThemeScraper):
         Returns:
             True if download succeeded, False otherwise
         """
+        start_time = time.time()
+
         try:
             # Strip year from show name (e.g., "Show Name (2020)" -> "Show Name")
             clean_name = re.sub(r'\s*\(\d{4}\)\s*$', '', show_name).strip()
 
             self._log_debug(f"Searching AnimeThemes API for: {clean_name}")
+            self.structured_logger.log_scraper_attempt("AnimeThemes", show_name, started=True)
 
             # Search for anime
             anime_data = self._search_anime(clean_name)
             if not anime_data:
                 self._log_debug("No anime found in API response")
+                duration = time.time() - start_time
+                self.structured_logger.log_scraper_result(
+                    "AnimeThemes", show_name, False, duration, "No anime found"
+                )
                 return False
 
             anime_name = anime_data.get("name", "Unknown")
@@ -48,6 +71,10 @@ class AnimeThemesScraper(ThemeScraper):
             video_url = self._find_best_theme(anime_data)
             if not video_url:
                 self._log_debug("No theme video URL found")
+                duration = time.time() - start_time
+                self.structured_logger.log_scraper_result(
+                    "AnimeThemes", show_name, False, duration, "No video URL found"
+                )
                 return False
 
             self._log_debug(f"Selected video URL: {video_url}")
@@ -58,30 +85,54 @@ class AnimeThemesScraper(ThemeScraper):
 
             if not self._download_video(video_url, temp_video):
                 self._log_debug("Video download failed")
+                duration = time.time() - start_time
+                self.structured_logger.log_scraper_result(
+                    "AnimeThemes", show_name, False, duration, "Video download failed"
+                )
                 return False
 
             self._log_debug("Extracting audio with FFmpeg")
 
-            # Extract audio using FFmpeg
-            success = self._extract_audio(temp_video, output_path)
+            # Extract audio using FFmpeg with improved error handling
+            success, ffmpeg_error = convert_audio(temp_video, output_path)
 
             # Cleanup temp file
             if temp_video.exists():
-                temp_video.unlink()
+                try:
+                    temp_video.unlink()
+                except OSError:
+                    pass
+
+            duration = time.time() - start_time
 
             if success:
                 self._log_debug(f"Audio extraction successful: {output_path}")
+                file_size = output_path.stat().st_size
+                self.structured_logger.log_download(
+                    "AnimeThemes", show_name, file_size, duration, str(output_path)
+                )
+                self.structured_logger.log_scraper_result(
+                    "AnimeThemes", show_name, True, duration
+                )
             else:
-                self._log_debug("Audio extraction failed")
+                error_msg = str(ffmpeg_error) if ffmpeg_error else "Unknown error"
+                self._log_debug(f"Audio extraction failed: {error_msg}")
+                self.structured_logger.log_scraper_result(
+                    "AnimeThemes", show_name, False, duration, error_msg
+                )
 
             return success
 
         except Exception as exc:
+            duration = time.time() - start_time
             self._log_error(
                 f"AnimeThemes search_and_download failed for '{show_name}': {str(exc)}",
                 exc_info=True
             )
             self._log_debug(f"Exception: {str(exc)}")
+            self.structured_logger.log_scraper_result(
+                "AnimeThemes", show_name, False, duration, str(exc)
+            )
             return False
 
     def _search_anime(self, show_name: str) -> Optional[Dict[str, Any]]:
@@ -97,9 +148,9 @@ class AnimeThemesScraper(ThemeScraper):
         return self._search_anime_with_retry(show_name)
 
     @retry_with_backoff(
-        max_attempts=3,
-        initial_delay=0.0,
-        backoff_factor=2.0,
+        max_attempts=Config.MAX_RETRY_ATTEMPTS,
+        initial_delay=Config.RETRY_INITIAL_DELAY_SEC,
+        backoff_factor=Config.RETRY_BACKOFF_FACTOR,
         exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
     )
     def _search_anime_with_retry(self, show_name: str) -> Optional[Dict[str, Any]]:
@@ -112,7 +163,7 @@ class AnimeThemesScraper(ThemeScraper):
         Returns:
             Anime data dictionary if found, None otherwise
         """
-        with httpx.Client(timeout=self.TIMEOUT) as client:
+        with httpx.Client(timeout=self.timeout) as client:
             # Use the anime index endpoint with name filter instead of search
             response = client.get(
                 f"{self.BASE_URL}/anime",
@@ -190,7 +241,6 @@ class AnimeThemesScraper(ThemeScraper):
         # Fall back to first theme
         return self._extract_video_url(themes[0])
 
-
     def _extract_video_url(self, theme: Dict[str, Any]) -> Optional[str]:
         """
         Extract video URL from theme data.
@@ -225,9 +275,9 @@ class AnimeThemesScraper(ThemeScraper):
         return self._download_video_with_retry(url, output_path)
 
     @retry_with_backoff(
-        max_attempts=3,
-        initial_delay=0.0,
-        backoff_factor=2.0,
+        max_attempts=Config.MAX_RETRY_ATTEMPTS,
+        initial_delay=Config.RETRY_INITIAL_DELAY_SEC,
+        backoff_factor=Config.RETRY_BACKOFF_FACTOR,
         exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
     )
     def _download_video_with_retry(self, url: str, output_path: Path) -> bool:
@@ -242,7 +292,7 @@ class AnimeThemesScraper(ThemeScraper):
             True if download succeeded, False otherwise
         """
         try:
-            with httpx.stream("GET", url, timeout=60.0) as response:
+            with httpx.stream("GET", url, timeout=Config.DOWNLOAD_TIMEOUT_SEC) as response:
                 if response.status_code != 200:
                     return False
 
@@ -256,72 +306,6 @@ class AnimeThemesScraper(ThemeScraper):
                 f"Video download failed from {url}: {str(exc)}",
                 exc_info=True
             )
-            return False
-
-    def _extract_audio(self, video_path: Path, audio_path: Path) -> bool:
-        """
-        Extract audio from video using FFmpeg.
-
-        Args:
-            video_path: Path to input video file
-            audio_path: Path where audio file should be saved
-
-        Returns:
-            True if extraction succeeded, False otherwise
-        """
-        try:
-            result = subprocess.run(
-                [
-                    "ffmpeg",
-                    "-i", str(video_path),
-                    "-vn",  # No video
-                    "-acodec", "libmp3lame",
-                    "-b:a", "320k",
-                    "-y",  # Overwrite
-                    str(audio_path)
-                ],
-                capture_output=True,
-                timeout=60,
-                check=False
-            )
-
-            if result.returncode != 0:
-                stderr_output = result.stderr.decode() if result.stderr else "No error output"
-                self._log_error(
-                    f"FFmpeg audio extraction failed for {video_path}: {stderr_output}",
-                    exc_info=False
-                )
-                if self.verbose:
-                    self._log_debug(f"FFmpeg stderr: {stderr_output}")
-                return False
-
-            # Validate file size
-            if audio_path.stat().st_size < 500_000:
-                self._log_debug(f"File too small: {audio_path.stat().st_size} bytes")
-                audio_path.unlink()
-                return False
-
-            return True
-
-        except subprocess.TimeoutExpired as exc:
-            self._log_error(
-                f"FFmpeg timeout extracting audio from {video_path}",
-                exc_info=True
-            )
-            self._log_debug(f"FFmpeg timeout exception: {str(exc)}")
-            # Clean up partial output file
-            if audio_path.exists():
-                try:
-                    audio_path.unlink()
-                except OSError:
-                    pass
-            return False
-        except Exception as exc:
-            self._log_error(
-                f"FFmpeg exception extracting audio from {video_path}: {str(exc)}",
-                exc_info=True
-            )
-            self._log_debug(f"FFmpeg exception: {str(exc)}")
             return False
 
     def get_source_name(self) -> str:

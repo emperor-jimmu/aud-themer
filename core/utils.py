@@ -6,6 +6,7 @@ from pathlib import Path
 from difflib import SequenceMatcher
 from functools import wraps
 from typing import Callable, Any
+from core.config import Config
 
 
 def validate_path(path: Path) -> bool:
@@ -53,7 +54,7 @@ def sanitize_filename(filename: str) -> str:
     return sanitized
 
 
-def validate_file_size(file_path: Path, min_size_bytes: int = 500_000) -> bool:
+def validate_file_size(file_path: Path, min_size_bytes: int = Config.MIN_FILE_SIZE_BYTES) -> bool:
     """
     Validate that a file meets minimum size requirements.
 
