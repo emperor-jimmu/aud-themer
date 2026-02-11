@@ -1,6 +1,10 @@
 """AnimeThemes.moe API scraper implementation."""
 
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -91,14 +95,13 @@ class AnimeThemesScraper(ThemeScraper):
                 )
                 return False
 
-            self._log_debug("Extracting audio with FFmpeg")
-            self._log_debug(f"Input video: {temp_video}, size: {temp_video.stat().st_size} bytes")
-            self._log_debug(f"Output path: {output_path}")
+            self.logger.info(f"Video download completed: {temp_video}, size: {temp_video.stat().st_size}")
+            self.logger.info("Starting FFmpeg audio extraction")
 
             # Extract audio using FFmpeg with improved error handling
             success, ffmpeg_error = convert_audio(temp_video, output_path)
             
-            self._log_debug(f"FFmpeg conversion completed: success={success}")
+            self.logger.info(f"FFmpeg conversion completed: success={success}")
 
             # Cleanup temp file
             if temp_video.exists():
@@ -300,6 +303,8 @@ class AnimeThemesScraper(ThemeScraper):
     def _extract_video_url(self, theme: Dict[str, Any]) -> Optional[str]:
         """
         Extract video URL from theme data.
+        Prefers smaller resolution videos (480p) over 1080p to reduce
+        download time, since we only need the audio track.
 
         Args:
             theme: Theme data dictionary
@@ -315,11 +320,30 @@ class AnimeThemesScraper(ThemeScraper):
         if not videos:
             return None
 
-        return videos[0].get("link")
+        # Prefer smaller files: look for 480p first, then any non-1080p
+        # Video filenames follow pattern: AnimeName-OP1-NCBD1080.webm
+        # where resolution is encoded in the filename
+        best_url = None
+        for video in videos:
+            link = video.get("link", "")
+            if not link:
+                continue
+            if best_url is None:
+                best_url = link
+            # Prefer 480p or lower resolution versions
+            if "480" in link:
+                return link
+            if "720" in link and ("1080" in best_url or "BD" in best_url):
+                best_url = link
+
+        return best_url
 
     def _download_video(self, url: str, output_path: Path) -> bool:
         """
-        Download video file from URL.
+        Download video file from URL using curl subprocess.
+        Python's HTTP libraries (httpx, urllib) can't stream from this
+        Cloudflare-fronted CDN, so we use curl instead.
+        Downloads to a local temp file first, then moves to the destination.
 
         Args:
             url: Video URL to download
@@ -328,41 +352,71 @@ class AnimeThemesScraper(ThemeScraper):
         Returns:
             True if download succeeded, False otherwise
         """
-        return self._download_video_with_retry(url, output_path)
-
-    @retry_with_backoff(
-        max_attempts=Config.MAX_RETRY_ATTEMPTS,
-        initial_delay=Config.RETRY_INITIAL_DELAY_SEC,
-        backoff_factor=Config.RETRY_BACKOFF_FACTOR,
-        exceptions=(httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)
-    )
-    def _download_video_with_retry(self, url: str, output_path: Path) -> bool:
-        """
-        Internal method with retry logic for network timeouts.
-
-        Args:
-            url: Video URL to download
-            output_path: Path where video should be saved
-
-        Returns:
-            True if download succeeded, False otherwise
-        """
+        temp_path = None
         try:
-            with httpx.stream("GET", url, timeout=Config.DOWNLOAD_TIMEOUT_SEC) as response:
-                if response.status_code != 200:
-                    return False
+            self.logger.info(f"Starting video download from {url}")
 
-                with open(output_path, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192):
-                        f.write(chunk)
+            # Create temp file path for local download
+            temp_fd, temp_str = tempfile.mkstemp(suffix='.webm')
+            os.close(temp_fd)
+            temp_path = Path(temp_str)
+            self.logger.info(f"Downloading to temp file: {temp_path}")
 
-                return True
+            # Use curl.exe explicitly (avoid PowerShell alias)
+            # Don't capture output so progress bar is visible to user
+            result = subprocess.run(
+                [
+                    'curl.exe', '-L', '-f',
+                    '-o', str(temp_path),
+                    '--connect-timeout', '30',
+                    '--max-time', '1200',
+                    '--progress-bar',
+                    '-A', 'ShowThemeCLI/1.0',
+                    url
+                ],
+                timeout=1260,
+                stdin=subprocess.DEVNULL
+            )
+
+            if result.returncode != 0:
+                self.logger.warning(
+                    f"curl failed with exit code {result.returncode}"
+                )
+                return False
+
+            # Verify file was downloaded and has content
+            if not temp_path.exists() or temp_path.stat().st_size == 0:
+                self.logger.warning("Downloaded file is empty or missing")
+                return False
+
+            file_size = temp_path.stat().st_size
+            self.logger.info(
+                f"Download complete: {file_size / 1024 / 1024:.1f} MB"
+            )
+
+            # Move completed file to final destination
+            self.logger.info(f"Moving to: {output_path}")
+            shutil.move(str(temp_path), str(output_path))
+            self.logger.info("File moved successfully")
+
+            return True
+
+        except subprocess.TimeoutExpired:
+            self._log_error("Download timed out after 1200 seconds")
+            return False
         except Exception as exc:
             self._log_error(
                 f"Video download failed from {url}: {str(exc)}",
                 exc_info=True
             )
             return False
+        finally:
+            # Clean up temp file if it still exists
+            try:
+                if temp_path and temp_path.exists():
+                    temp_path.unlink()
+            except Exception:
+                pass
 
     def get_source_name(self) -> str:
         """
