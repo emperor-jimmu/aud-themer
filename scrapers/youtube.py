@@ -52,7 +52,34 @@ class YoutubeScraper(ThemeScraper):
             query = f"{show_name} full theme song"
             self._log_debug(f"YouTube search query: {query}")
 
-            # Configure yt-dlp options
+            # Configure yt-dlp options for info extraction
+            info_opts = {
+                'default_search': 'ytsearch1',
+                'noplaylist': True,
+                'quiet': not self.verbose,
+                'no_warnings': not self.verbose,
+            }
+
+            # First, extract video info to check duration
+            with yt_dlp.YoutubeDL(info_opts) as ydl:
+                info = ydl.extract_info(query, download=False)
+                
+                # Handle search results
+                if 'entries' in info:
+                    info = info['entries'][0]
+                
+                duration = info.get('duration', 0)
+                
+                # Skip if video is longer than 10 minutes (600 seconds)
+                if duration > 600:
+                    self._log_debug(
+                        f"Video too long ({duration}s > 600s), skipping"
+                    )
+                    return False
+                
+                self._log_debug(f"Video duration: {duration}s (within limit)")
+
+            # Configure yt-dlp options for download
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'postprocessors': [{
