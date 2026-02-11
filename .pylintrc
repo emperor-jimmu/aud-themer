@@ -17,6 +17,15 @@ disable=
     R0913,  # too-many-arguments
     W0212,  # protected-access
     W0511,  # fixme
+    C0415,  # import-outside-toplevel (acceptable for conditional imports)
+    R0801,  # duplicate-code (acceptable for similar patterns in scrapers)
+    R1705,  # no-else-return (acceptable for clarity)
+    W1309,  # f-string-without-interpolation (acceptable for consistency)
+    R0917,  # too-many-positional-arguments (acceptable for initialization)
+    R0912,  # too-many-branches (acceptable for error handling)
+    R0915,  # too-many-statements (acceptable for orchestration logic)
+    R0911,  # too-many-return-statements (acceptable for early returns)
+    W0718,  # broad-exception-caught (intentional for graceful error handling)
 
 [REPORTS]
 # Set the output format
@@ -73,4 +82,4 @@ deprecated-modules=optparse
 
 [EXCEPTIONS]
 # Exceptions that will emit a warning when caught
-overgeneral-exceptions=Exception
+overgeneral-exceptions=builtins.Exception

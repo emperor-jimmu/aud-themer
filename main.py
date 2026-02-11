@@ -45,37 +45,37 @@ def main(
 ):
     """
     Scan a directory of TV shows/anime and download theme songs.
-    
+
     The tool will scan each subdirectory in INPUT_DIR, identify the show name,
     and attempt to download theme songs from multiple sources in priority order:
-    
+
     1. TelevisionTunes.com (best for TV shows)
     2. AnimeThemes.moe (best for anime)
     3. Themes.moe (additional anime source)
     4. YouTube (fallback for everything)
-    
+
     By default, folders with existing theme files are skipped. Use --force to
     overwrite existing files.
-    
+
     Examples:
-    
+
         # Basic usage
         python main.py /path/to/tv_shows
-        
+
         # Force overwrite existing themes
         python main.py /path/to/tv_shows --force
-        
+
         # Dry run to see what would be processed
         python main.py /path/to/tv_shows --dry-run
-        
+
         # Enable verbose logging
         python main.py /path/to/tv_shows --verbose
     """
     console.print("[bold blue]Show Theme CLI[/bold blue]\n")
-    
+
     # Validate dependencies before processing
     validate_dependencies(console)
-    
+
     try:
         orchestrator = Orchestrator(console, force, dry_run, verbose)
         orchestrator.process_directory(input_dir)

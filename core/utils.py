@@ -11,10 +11,10 @@ from typing import Callable, Any
 def validate_path(path: Path) -> bool:
     """
     Validate that a path exists and is a directory.
-    
+
     Args:
         path: Path object to validate
-        
+
     Returns:
         True if path exists and is a directory, False otherwise
     """
@@ -24,63 +24,63 @@ def validate_path(path: Path) -> bool:
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize a filename to ensure OS compatibility.
-    
+
     Removes or replaces characters that are invalid in filenames
     on Windows, macOS, and Linux.
-    
+
     Args:
         filename: Original filename string
-        
+
     Returns:
         Sanitized filename safe for all major operating systems
     """
     # Remove or replace invalid characters: < > : " / \ | ? *
     sanitized = re.sub(r'[<>:"/\\|?*]', '', filename)
-    
+
     # Remove control characters (ASCII 0-31)
     sanitized = re.sub(r'[\x00-\x1f]', '', sanitized)
-    
+
     # Replace multiple spaces with single space
     sanitized = re.sub(r'\s+', ' ', sanitized)
-    
+
     # Strip leading/trailing whitespace and dots
     sanitized = sanitized.strip('. ')
-    
+
     # If empty after sanitization, use a default name
     if not sanitized:
         sanitized = 'unnamed'
-    
+
     return sanitized
 
 
 def validate_file_size(file_path: Path, min_size_bytes: int = 500_000) -> bool:
     """
     Validate that a file meets minimum size requirements.
-    
+
     Args:
         file_path: Path to the file to validate
         min_size_bytes: Minimum file size in bytes (default: 500KB)
-        
+
     Returns:
         True if file exists and is larger than min_size_bytes, False otherwise
     """
     if not file_path.exists() or not file_path.is_file():
         return False
-    
+
     return file_path.stat().st_size > min_size_bytes
 
 
 def calculate_name_similarity(name1: str, name2: str) -> float:
     """
     Calculate similarity ratio between two strings.
-    
+
     Uses difflib.SequenceMatcher to compute similarity ratio.
     Comparison is case-insensitive.
-    
+
     Args:
         name1: First string to compare
         name2: Second string to compare
-        
+
     Returns:
         Similarity ratio between 0.0 (no match) and 1.0 (exact match)
     """
@@ -95,16 +95,16 @@ def retry_with_backoff(
 ) -> Callable:
     """
     Decorator to retry a function with exponential backoff.
-    
+
     Args:
         max_attempts: Maximum number of retry attempts (default: 3)
         initial_delay: Initial delay in seconds before first retry (default: 0)
         backoff_factor: Multiplier for delay between retries (default: 2.0)
         exceptions: Tuple of exception types to catch and retry (default: all exceptions)
-        
+
     Returns:
         Decorated function with retry logic
-        
+
     Example:
         @retry_with_backoff(max_attempts=3, initial_delay=0, backoff_factor=2)
         def network_operation():
@@ -116,25 +116,25 @@ def retry_with_backoff(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             delay = initial_delay
             last_exception = None
-            
+
             for attempt in range(max_attempts):
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    
+
                     # If this was the last attempt, raise the exception
                     if attempt == max_attempts - 1:
                         raise
-                    
+
                     # Wait before retrying (skip delay on first attempt if initial_delay is 0)
                     if delay > 0 or attempt > 0:
                         time.sleep(delay if attempt == 0 else delay * (backoff_factor ** attempt))
-            
+
             # This should never be reached, but just in case
             if last_exception:
                 raise last_exception
             return None
-        
+
         return wrapper
     return decorator

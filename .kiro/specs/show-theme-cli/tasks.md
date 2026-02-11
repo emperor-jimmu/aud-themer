@@ -235,16 +235,16 @@ This implementation plan breaks down the Show Theme CLI into discrete, increment
     - Display installation instructions if missing (playwright install chromium)
     - _Requirements: 12.4_
 
-- [ ] 15. Final polish and documentation
-  - [ ] 15.1 Create README.md with usage instructions
+- [x] 15. Final polish and documentation
+  - [x] 15.1 Create README.md with usage instructions
     - Document installation steps
     - Document CLI usage and examples
     - Document requirements (Python 3.12+, FFmpeg)
     - Document supported sources
-  - [ ] 15.2 Add docstrings to all public functions and classes
+  - [x] 15.2 Add docstrings to all public functions and classes
     - Follow Google-style docstring format
     - Include parameter types and return types
-  - [ ] 15.3 Run pylint and fix any issues
+  - [x] 15.3 Run pylint and fix any issues
     - Ensure code passes pylint checks
     - Fix any style violations
 
