@@ -27,7 +27,10 @@ class ThemesMoeScraper(ThemeScraper):
             True if download succeeded, False otherwise
         """
         try:
-            return self._search_and_download_with_retry(show_name, output_path)
+            # Strip year from show name (e.g., "Show Name (2020)" -> "Show Name")
+            import re
+            clean_name = re.sub(r'\s*\(\d{4}\)\s*$', '', show_name).strip()
+            return self._search_and_download_with_retry(clean_name, output_path)
         except PlaywrightTimeoutError:
             return False
         except Exception:

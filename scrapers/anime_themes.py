@@ -29,10 +29,14 @@ class AnimeThemesScraper(ThemeScraper):
             True if download succeeded, False otherwise
         """
         try:
-            self._log_debug(f"Searching AnimeThemes API for: {show_name}")
+            # Strip year from show name (e.g., "Show Name (2020)" -> "Show Name")
+            import re
+            clean_name = re.sub(r'\s*\(\d{4}\)\s*$', '', show_name).strip()
+            
+            self._log_debug(f"Searching AnimeThemes API for: {clean_name}")
 
             # Search for anime
-            anime_data = self._search_anime(show_name)
+            anime_data = self._search_anime(clean_name)
             if not anime_data:
                 self._log_debug("No anime found in API response")
                 return False
@@ -125,6 +129,12 @@ class AnimeThemesScraper(ThemeScraper):
                 self._log_debug(f"API returned {anime_count} anime results")
 
             anime_list = data.get("search", {}).get("anime", [])
+
+            if not anime_list:
+                return None
+
+            # Filter out non-dict items (API sometimes returns mixed types)
+            anime_list = [a for a in anime_list if isinstance(a, dict)]
 
             if not anime_list:
                 return None
