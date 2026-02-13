@@ -92,8 +92,11 @@ python main.py /path/to/tv_shows
 # TV shows only (TelevisionTunes, YouTube)
 python main.py /path/to/tv_shows --mode tv
 
-# Anime only (AnimeThemes, Themes.moe, YouTube)
+# Anime only (Themes.moe, AnimeThemes, YouTube)
 python main.py /path/to/anime --mode anime
+
+# YouTube only
+python main.py /path/to/shows --mode youtube
 
 # With options
 python main.py /path/to/tv_shows --mode tv --force --verbose

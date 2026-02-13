@@ -19,6 +19,7 @@ class ModeChoice(str, Enum):
     TV = "tv"
     ANIME = "anime"
     BOTH = "both"
+    YOUTUBE = "youtube"
 
 app = typer.Typer(
     help="Automate theme song downloads for TV shows and anime",
@@ -41,7 +42,7 @@ def main(
         ModeChoice.BOTH,
         "--mode",
         "-m",
-        help="Content type: tv (TelevisionTunes, YouTube), anime (AnimeThemes, Themes.moe, YouTube), or both (all sources)"
+        help="Content type: tv (TelevisionTunes, YouTube), anime (Themes.moe, AnimeThemes, YouTube), both (all sources), or youtube (YouTube only)"
     ),
     force: bool = typer.Option(
         False,
@@ -83,15 +84,18 @@ def main(
     2. YouTube (fallback)
 
     Anime Mode (--mode anime):
-    1. AnimeThemes.moe
-    2. Themes.moe
+    1. Themes.moe
+    2. AnimeThemes.moe
     3. YouTube (fallback)
 
     Both Mode (--mode both, default):
     1. TelevisionTunes.co.uk
-    2. AnimeThemes.moe
-    3. Themes.moe
+    2. Themes.moe
+    3. AnimeThemes.moe
     4. YouTube (fallback)
+
+    YouTube Mode (--mode youtube):
+    1. YouTube only
 
     By default, folders with existing theme files are skipped. Use --force to
     overwrite existing files.
@@ -106,6 +110,9 @@ def main(
 
         # Process both (default)
         python main.py /path/to/shows --mode both
+
+        # Use YouTube only
+        python main.py /path/to/shows --mode youtube
 
         # Force overwrite existing themes
         python main.py /path/to/tv_shows --force

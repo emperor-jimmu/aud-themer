@@ -22,6 +22,7 @@ class ContentMode(Enum):
     TV = "tv"
     ANIME = "anime"
     BOTH = "both"
+    YOUTUBE = "youtube"
 
 
 class CriticalError(Exception):
@@ -79,15 +80,18 @@ class Orchestrator:
         2. YouTube
 
         Anime Mode:
-        1. AnimeThemes
-        2. Themes.moe
+        1. Themes.moe
+        2. AnimeThemes
         3. YouTube
 
         Both Mode:
         1. TelevisionTunes
-        2. AnimeThemes
-        3. Themes.moe
+        2. Themes.moe
+        3. AnimeThemes
         4. YouTube
+
+        YouTube Mode:
+        1. YouTube only
         """
         if self.mode == ContentMode.TV:
             self.scrapers = [
@@ -97,16 +101,21 @@ class Orchestrator:
             self.logger.info("Initialized scrapers for TV mode: TelevisionTunes, YouTube")
         elif self.mode == ContentMode.ANIME:
             self.scrapers = [
-                AnimeThemesScraper(self.console, self.verbose, self.timeout),
                 ThemesMoeScraper(self.console, self.verbose, self.timeout),
+                AnimeThemesScraper(self.console, self.verbose, self.timeout),
                 YoutubeScraper(self.console, self.verbose)
             ]
-            self.logger.info("Initialized scrapers for Anime mode: AnimeThemes, Themes.moe, YouTube")
+            self.logger.info("Initialized scrapers for Anime mode: Themes.moe, AnimeThemes, YouTube")
+        elif self.mode == ContentMode.YOUTUBE:
+            self.scrapers = [
+                YoutubeScraper(self.console, self.verbose)
+            ]
+            self.logger.info("Initialized scrapers for YouTube mode: YouTube only")
         else:  # ContentMode.BOTH
             self.scrapers = [
                 TelevisionTunesScraper(self.console, self.verbose, self.timeout),
-                AnimeThemesScraper(self.console, self.verbose, self.timeout),
                 ThemesMoeScraper(self.console, self.verbose, self.timeout),
+                AnimeThemesScraper(self.console, self.verbose, self.timeout),
                 YoutubeScraper(self.console, self.verbose)
             ]
             self.logger.info("Initialized scrapers for Both mode: All sources")

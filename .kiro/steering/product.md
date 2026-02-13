@@ -5,14 +5,15 @@ Show Theme CLI is a command-line tool that automates theme song retrieval for TV
 The tool uses a waterfall approach, attempting sources in priority order until a theme is successfully downloaded. Source selection is determined by the content mode:
 
 - TV Mode: TelevisionTunes → YouTube
-- Anime Mode: AnimeThemes → Themes.moe → YouTube
-- Both Mode (default): TelevisionTunes → AnimeThemes → Themes.moe → YouTube
+- Anime Mode: Themes.moe → AnimeThemes → YouTube
+- Both Mode (default): TelevisionTunes → Themes.moe → AnimeThemes → YouTube
+- YouTube Mode: YouTube only
 
 It's designed to be idempotent, safe to re-run without re-downloading existing themes, and provides rich console feedback during operation.
 
 Key features:
 - Automatic theme song discovery and download from multiple sources
-- Content mode selection (TV, Anime, or Both) for optimized source usage
+- Content mode selection (TV, Anime, Both, or YouTube) for optimized source usage
 - Smart source prioritization with fallback handling
 - Skip existing themes (with force override option)
 - Rich console output with progress tracking
