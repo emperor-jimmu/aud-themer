@@ -177,6 +177,7 @@ def convert_audio(
                 "ffmpeg",
                 "-i", str(input_path),
                 "-vn",  # No video
+                "-af", "volume=0.8",  # Reduce volume by 20%
                 "-acodec", codec,
                 "-b:a", bitrate,
                 "-y",  # Overwrite output file
