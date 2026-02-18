@@ -16,6 +16,23 @@ use std::time::Instant;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+/// Content mode for source selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ContentMode {
+    /// TV shows only (TelevisionTunes + YouTube)
+    Tv,
+    /// Anime only (AnimeThemes + Themes.moe + YouTube)
+    Anime,
+    /// Both TV and anime (all sources)
+    Both,
+}
+
+impl Default for ContentMode {
+    fn default() -> Self {
+        Self::Both
+    }
+}
+
 /// Show Theme CLI - Automate theme song downloads for TV shows and anime
 #[derive(Parser, Debug)]
 #[command(
@@ -28,6 +45,10 @@ pub struct CliArgs {
     /// Root directory containing show folders
     #[arg(value_name = "INPUT_DIR")]
     pub input_dir: Option<PathBuf>,
+
+    /// Content type - tv, anime, or both
+    #[arg(short, long, value_enum, default_value_t = ContentMode::Both)]
+    pub mode: ContentMode,
 
     /// Overwrite existing theme files
     #[arg(short, long)]
@@ -118,16 +139,36 @@ fn init_logging(verbose: bool) {
     }
 }
 
-/// Initialize all scrapers in priority order
-fn init_scrapers() -> Vec<Box<dyn ThemeScraper>> {
+/// Initialize scrapers based on content mode
+fn init_scrapers(mode: ContentMode) -> Vec<Box<dyn ThemeScraper>> {
     let shared_browser = SharedBrowser::new();
-    let scrapers: Vec<Box<dyn ThemeScraper>> = vec![
-        Box::new(TvTunesScraper::new(shared_browser.clone())),
-        Box::new(AnimeThemesScraper::new()),
-        Box::new(ThemesMoeScraper::new(shared_browser)),
-        Box::new(YouTubeScraper::new()),
-    ];
-    scrapers
+    
+    match mode {
+        ContentMode::Tv => {
+            // TV mode: TelevisionTunes + YouTube
+            vec![
+                Box::new(TvTunesScraper::new(shared_browser)),
+                Box::new(YouTubeScraper::new()),
+            ]
+        }
+        ContentMode::Anime => {
+            // Anime mode: AnimeThemes + Themes.moe + YouTube
+            vec![
+                Box::new(AnimeThemesScraper::new()),
+                Box::new(ThemesMoeScraper::new(shared_browser)),
+                Box::new(YouTubeScraper::new()),
+            ]
+        }
+        ContentMode::Both => {
+            // Both mode: All sources
+            vec![
+                Box::new(TvTunesScraper::new(shared_browser.clone())),
+                Box::new(AnimeThemesScraper::new()),
+                Box::new(ThemesMoeScraper::new(shared_browser)),
+                Box::new(YouTubeScraper::new()),
+            ]
+        }
+    }
 }
 
 #[tokio::main]
@@ -188,9 +229,9 @@ async fn main() {
         timeout: args.timeout,
     };
 
-    // Initialize scrapers
-    info!("Initializing scrapers");
-    let scrapers = init_scrapers();
+    // Initialize scrapers based on content mode
+    info!("Initializing scrapers for mode: {:?}", args.mode);
+    let scrapers = init_scrapers(args.mode);
 
     // Create orchestrator
     let mut orchestrator = Orchestrator::new(config, scrapers);
