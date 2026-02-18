@@ -239,13 +239,6 @@ impl Orchestrator {
             }
         }
 
-        // Dry run mode
-        if self.config.dry_run {
-            tracing::info!("Dry run mode - skipping actual download");
-            println!("  {} Dry run - would search for theme", "ℹ".blue());
-            return;
-        }
-
         // Try scrapers in order
         for scraper in &self.scrapers {
             let source_name = scraper.source_name();
@@ -253,33 +246,44 @@ impl Orchestrator {
             tracing::info!("Attempting scraper: {}", source_name);
             println!("  {} Trying {}...", "→".cyan(), source_name);
 
-            // Apply rate limiting
-            self.rate_limiter.wait_if_needed(source_name).await;
+            // Apply rate limiting (skip in dry run to speed up)
+            if !self.config.dry_run {
+                self.rate_limiter.wait_if_needed(source_name).await;
+            }
 
-            // Try to download
+            // Try to download (or simulate in dry run)
             match scraper
                 .search_and_download(
                     &show_folder.search_name,
                     &show_folder.path.join("theme.mp3"),
+                    self.config.dry_run,
                 )
                 .await
             {
                 Ok(true) => {
-                    // Success!
-                    let theme_path = show_folder.path.join("theme.mp3");
-
-                    let file_size = get_file_size_formatted(&theme_path);
-                    tracing::info!(
-                        "Successfully downloaded from {} ({})",
-                        source_name,
-                        file_size
-                    );
-                    println!(
-                        "  {} Downloaded from {} ({})",
-                        "✓".green().bold(),
-                        source_name.green(),
-                        file_size
-                    );
+                    // Success (or would succeed in dry run)
+                    if self.config.dry_run {
+                        tracing::info!("Dry run: Would download from {}", source_name);
+                        println!(
+                            "  {} Would download from {}",
+                            "✓".green().bold(),
+                            source_name.green()
+                        );
+                    } else {
+                        let theme_path = show_folder.path.join("theme.mp3");
+                        let file_size = get_file_size_formatted(&theme_path);
+                        tracing::info!(
+                            "Successfully downloaded from {} ({})",
+                            source_name,
+                            file_size
+                        );
+                        println!(
+                            "  {} Downloaded from {} ({})",
+                            "✓".green().bold(),
+                            source_name.green(),
+                            file_size
+                        );
+                    }
                     self.results.success += 1;
                     return;
                 }

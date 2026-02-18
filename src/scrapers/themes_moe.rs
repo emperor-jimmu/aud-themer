@@ -216,13 +216,18 @@ impl ThemesMoeScraper {
 
 #[async_trait]
 impl ThemeScraper for ThemesMoeScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
+    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
         tracing::info!("[Themes.moe] Starting search for: {}", show_name);
 
         let Some(media_url) = self.search_anime(show_name).await? else {
             tracing::info!("[Themes.moe] No theme found for: {}", show_name);
             return Ok(false);
         };
+
+        if dry_run {
+            tracing::info!("[Themes.moe] Dry run - would download from: {}", media_url);
+            return Ok(true);
+        }
 
         self.download_media(&media_url, output_path).await
     }

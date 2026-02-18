@@ -207,7 +207,7 @@ impl Default for AnimeThemesScraper {
 
 #[async_trait]
 impl ThemeScraper for AnimeThemesScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
+    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
         tracing::info!("[AnimeThemes] Starting search for: {}", show_name);
 
         // Search for anime
@@ -235,6 +235,11 @@ impl ThemeScraper for AnimeThemesScraper {
         };
 
         tracing::info!("[AnimeThemes] Video URL: {}", video_url);
+
+        if dry_run {
+            tracing::info!("[AnimeThemes] Dry run - would download from: {}", video_url);
+            return Ok(true);
+        }
 
         // Download video to temporary file
         let temp_video = output_path.with_extension("temp.webm");

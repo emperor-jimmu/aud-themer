@@ -129,7 +129,7 @@ impl Default for YouTubeScraper {
 
 #[async_trait]
 impl ThemeScraper for YouTubeScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
+    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
         tracing::info!("[YouTube] Starting search for: {}", show_name);
 
         let queries = Self::generate_search_queries(show_name);
@@ -172,6 +172,12 @@ impl ThemeScraper for YouTubeScraper {
                     continue;
                 }
             };
+
+            if dry_run {
+                let url = format!("https://www.youtube.com/watch?v={}", video_id);
+                tracing::info!("[YouTube] Dry run - would download from: {}", url);
+                return Ok(true);
+            }
 
             // Download audio
             match self.download_audio(&video_id, output_path).await {
