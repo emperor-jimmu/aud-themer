@@ -2,10 +2,6 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::process;
 
-mod config;
-mod scrapers;
-mod utils;
-
 /// Show Theme CLI - Automate theme song downloads for TV shows and anime
 #[derive(Parser, Debug)]
 #[command(
@@ -94,7 +90,6 @@ async fn main() {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
 
     #[test]
     fn test_validate_input_path_nonexistent() {

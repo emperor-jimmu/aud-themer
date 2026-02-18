@@ -58,23 +58,23 @@ Rewrite Show Theme CLI from Python to Rust (2024 edition), preserving all existi
     - **Property 7: Error isolation across shows**
     - **Validates: Requirements 2.1, 3.1, 3.2, 3.3, 4.2, 4.3, 4.5, 12.1**
 
-- [ ] 5. Checkpoint - Ensure all tests pass
+- [x] 5. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Implement scrapers
-  - [ ] 6.1 Create `src/scrapers/anime_themes.rs` implementing `ThemeScraper` for AnimeThemes.moe API using reqwest, with best-match selection via strsim, theme priority logic (OP1 > OP > first), video download, and FFmpeg audio extraction
+- [x] 6. Implement scrapers
+  - [x] 6.1 Create `src/scrapers/anime_themes.rs` implementing `ThemeScraper` for AnimeThemes.moe API using reqwest, with best-match selection via strsim, theme priority logic (OP1 > OP > first), video download, and FFmpeg audio extraction
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
-  - [ ] 6.2 Write property tests for AnimeThemes: best match selection (Property 8), theme priority selection (Property 9)
+  - [x] 6.2 Write property tests for AnimeThemes: best match selection (Property 8), theme priority selection (Property 9)
     - **Property 8: Best match selection by string similarity**
     - **Property 9: Theme type priority selection**
     - **Validates: Requirements 6.2, 6.3**
-  - [ ] 6.3 Create `src/scrapers/tv_tunes.rs` implementing `ThemeScraper` for TelevisionTunes.co.uk using chromiumoxide browser automation, with search, best-match result selection, download, and WAV-to-MP3 conversion
+  - [x] 6.3 Create `src/scrapers/tv_tunes.rs` implementing `ThemeScraper` for TelevisionTunes.co.uk using chromiumoxide browser automation, with search, best-match result selection, download, and WAV-to-MP3 conversion
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
-  - [ ] 6.4 Create `src/scrapers/themes_moe.rs` implementing `ThemeScraper` for Themes.moe using chromiumoxide browser automation, with Anime Search mode selection, OP link extraction, media download, and video-to-MP3 conversion
+  - [x] 6.4 Create `src/scrapers/themes_moe.rs` implementing `ThemeScraper` for Themes.moe using chromiumoxide browser automation, with Anime Search mode selection, OP link extraction, media download, and video-to-MP3 conversion
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
-  - [ ] 6.5 Create `src/scrapers/youtube.rs` implementing `ThemeScraper` for YouTube using yt-dlp subprocess, with multiple search query generation, duration filtering, and MP3 extraction
+  - [x] 6.5 Create `src/scrapers/youtube.rs` implementing `ThemeScraper` for YouTube using yt-dlp subprocess, with multiple search query generation, duration filtering, and MP3 extraction
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
-  - [ ] 6.6 Write property tests for YouTube: search query generation (Property 10), duration filtering (Property 11)
+  - [x] 6.6 Write property tests for YouTube: search query generation (Property 10), duration filtering (Property 11)
     - **Property 10: YouTube search query generation**
     - **Property 11: YouTube duration filtering**
     - **Validates: Requirements 8.1, 8.2**

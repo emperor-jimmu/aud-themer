@@ -1,6 +1,11 @@
 use async_trait::async_trait;
 use std::path::Path;
 
+pub mod anime_themes;
+pub mod tv_tunes;
+pub mod themes_moe;
+pub mod youtube;
+
 /// Outcome of a scraper operation
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScraperOutcome {
