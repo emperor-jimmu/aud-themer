@@ -128,6 +128,19 @@ Errors in one show don't affect processing of other shows. Each series folder is
 - Dependencies: clap, reqwest, tokio, chromiumoxide, indicatif, colored, anyhow, thiserror, tracing, strsim, proptest, etc.
 - Binary target: `show-theme-cli`
 
+### src/config.rs
+
+Configuration constants used throughout the application:
+
+- `MIN_FILE_SIZE_BYTES`: 500KB minimum for valid theme files
+- `DEFAULT_TIMEOUT_SEC`: 30 seconds for network requests
+- `DOWNLOAD_TIMEOUT_SEC`: 60 seconds for file downloads
+- `AUDIO_BITRATE`: "320k" for MP3 conversion quality
+- `MAX_VIDEO_DURATION_SEC`: 600 seconds (10 minutes) for YouTube
+- `MAX_RETRY_ATTEMPTS`: 3 attempts for failed operations
+- `RETRY_BACKOFF_FACTOR`: 2.0 for exponential backoff
+- `USER_AGENT`: HTTP User-Agent header for all requests (format: "show-theme-cli/{version} (repo_url)")
+
 ### .gitignore
 
 - Rust artifacts: `target/`, `Cargo.lock` (for libraries, included for binaries)
@@ -166,3 +179,29 @@ Errors in one show don't affect processing of other shows. Each series folder is
 - Strong typing for configuration constants
 - Enum variants for scraper outcomes and error types
 - Path types (`Path`, `PathBuf`) for file system operations
+
+## Common Issues and Solutions
+
+### HTTP 403 Forbidden Errors
+
+- **Cause**: Missing or invalid User-Agent header in HTTP requests
+- **Solution**: All HTTP clients must include `Config::USER_AGENT` in their builder
+- **Example**: `.user_agent(Config::USER_AGENT)` in reqwest Client::builder()
+
+### Themes.moe Not Finding Results
+
+- **Cause**: Limited database coverage; not all anime are indexed
+- **Solution**: Waterfall pattern automatically falls back to YouTube
+- **Note**: Themes.moe pulls from AnimeThemes.moe CDN, so coverage depends on their database
+
+### Browser Automation Failures
+
+- **Cause**: Website structure changes or selector mismatches
+- **Solution**: Use Playwright MCP or browser DevTools to inspect current page structure
+- **Testing**: Verify selectors match actual DOM elements on live site
+
+### FFmpeg Conversion Errors
+
+- **Cause**: Corrupted downloads, unsupported formats, or FFmpeg not installed
+- **Solution**: Check FFmpeg installation, verify input file integrity, review error logs
+- **Validation**: Ensure downloaded files meet minimum size requirements (500KB)

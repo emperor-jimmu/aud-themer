@@ -24,7 +24,9 @@
 
 ### HTTP Client
 
-- **reqwest** (>=0.11): Async HTTP client for API calls (AnimeThemes.moe)
+- **reqwest** (>=0.11): Async HTTP client for API calls (AnimeThemes.moe) and media downloads
+- All HTTP clients must include User-Agent header to avoid 403 Forbidden errors from APIs
+- User-Agent format: `show-theme-cli/{version} (repository_url)`
 
 ### Async Runtime
 
@@ -60,6 +62,47 @@
 ### Testing
 
 - **proptest** (>=1.0): Property-based testing library
+
+## Scraper Implementation Details
+
+### AnimeThemes.moe API Scraper
+
+- Uses reqwest HTTP client with User-Agent header
+- REST API endpoint: `https://api.animethemes.moe/anime`
+- Query parameters: `filter[name]={show_name}&include=animethemes.animethemeentries.videos`
+- Returns JSON with anime metadata and video URLs
+- Prioritizes OP1 > OP > first available theme
+- Downloads .webm files and converts to MP3 using FFmpeg
+
+### Themes.moe Browser Scraper
+
+- Uses chromiumoxide for browser automation
+- Workflow:
+  1. Navigate to https://themes.moe
+  2. Click mode selector button and choose "Anime Search"
+  3. Enter show name in combobox and submit
+  4. Parse results table for OP theme links
+  5. Extract .webm URLs from table cells
+- Selector: `table a[href*='.webm']` for theme links
+- Checks for "No anime found" message to handle missing entries
+- Filters for OP themes by checking link text (OP1, OP2, etc.) or href content
+- Note: Database coverage is limited; not all anime are available
+
+### TelevisionTunes Scraper
+
+- Uses chromiumoxide for browser automation
+- Searches https://www.televisiontunes.com
+- Downloads audio files (MP3 or WAV format)
+- Converts WAV to MP3 if needed using FFmpeg
+- Includes User-Agent header for HTTP downloads
+
+### YouTube Fallback Scraper
+
+- Uses yt-dlp subprocess for downloads
+- Generates multiple search queries with variations
+- Filters videos by duration (max 10 minutes)
+- Downloads audio-only format and converts to MP3
+- Last resort when other sources fail
 
 ## Code Quality
 
