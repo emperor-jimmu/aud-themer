@@ -1,14 +1,14 @@
 {
   "enabled": true,
   "name": "Security Review",
-  "description": "Automatically reviews code changes for security vulnerabilities including buffer overflows, injection flaws, unsafe operations, and other security best practices before write operations",
+  "description": "Automatically reviews Rust code changes for security vulnerabilities including unsafe blocks, memory safety issues, injection flaws, and other security best practices before write operations",
   "version": "1",
   "when": {
     "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Review this code change for security vulnerabilities including: buffer overflows, SQL/command injection risks, unsafe deserialization, hardcoded credentials, insecure random number generation, path traversal vulnerabilities, unsafe file operations, and other security flaws. If any issues are found, explain them clearly and suggest fixes. If the code is secure, confirm and proceed."
+    "prompt": "Review this Rust code change for security vulnerabilities including: unsafe blocks (verify soundness and necessity), command injection risks in subprocess calls (std::process::Command), path traversal vulnerabilities, unsafe file operations, hardcoded credentials, insecure random number generation, integer overflow/underflow, panic in unsafe contexts, unvalidated user input, and other security flaws. Check that unsafe blocks have proper safety comments justifying their use. Verify that Command arguments are properly sanitized. If any issues are found, explain them clearly and suggest fixes. If the code is secure, confirm and proceed."
   },
   "workspaceFolderName": "aud-themer",
   "shortName": "security-review-hook"

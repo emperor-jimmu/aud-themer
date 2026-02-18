@@ -2,125 +2,175 @@
 
 ## Language and Runtime
 
-- Python 3.12+
-- Standard library modules for file system operations and subprocess management
+- Rust 2024 edition
+- Tokio async runtime for concurrent operations
+- Standard library for file system operations and subprocess management
 
 ## Core Dependencies
 
 ### CLI Framework
 
-- **Typer** (>=0.9.0): Modern CLI framework with type hints and automatic help generation
+- **clap** (>=4.0, derive feature): Modern CLI framework with derive macros for argument parsing
 
 ### Console Output
 
-- **Rich** (>=13.0.0): Beautiful console output with progress bars, tables, and colored status messages
+- **indicatif** (>=0.17): Progress bars and spinners
+- **colored** (>=2.0): Colored terminal output
+- **console** (>=0.15): Additional console utilities
 
 ### Web Automation
 
-- **Playwright** (>=1.40.0): Robust browser automation for sites without APIs (TelevisionTunes, Themes.moe)
+- **chromiumoxide** (>=0.5): Headless Chrome automation for sites without APIs (TelevisionTunes, Themes.moe)
 
 ### HTTP Client
 
-- **httpx** (>=0.25.0): Modern async-capable HTTP client for API calls (AnimeThemes.moe)
+- **reqwest** (>=0.11): Async HTTP client for API calls (AnimeThemes.moe)
+
+### Async Runtime
+
+- **tokio** (>=1.0, full feature): Async runtime for browser automation and HTTP requests
+- **async-trait** (>=0.1): Trait support for async methods
 
 ### Media Processing
 
-- **yt-dlp** (>=2023.11.0): YouTube downloader for fallback source
+- **yt-dlp**: External dependency called as subprocess for YouTube downloads
 - **FFmpeg**: External dependency for audio extraction and format conversion (must be installed separately)
+
+### Error Handling
+
+- **anyhow** (>=1.0): Flexible error handling for application-level errors
+- **thiserror** (>=1.0): Derive macros for custom error types
+
+### Utilities
+
+- **strsim** (>=0.10): String similarity comparison for best-match selection
+- **rand** (>=0.8): Random number generation for rate limiting jitter
+- **scopeguard** (>=1.0): Cleanup guarantees for temporary files
+
+### Logging
+
+- **tracing** (>=0.1): Structured logging framework
+- **tracing-subscriber** (>=0.3): Log formatting and output
+
+### Serialization
+
+- **serde** (>=1.0, derive feature): Serialization framework
+- **serde_json** (>=1.0): JSON support for API responses
 
 ### Testing
 
-- **pytest** (>=7.4.0): Test framework
-- **pytest-asyncio** (>=0.21.0): Async test support
-- **Hypothesis** (>=6.92.0): Property-based testing library
+- **proptest** (>=1.0): Property-based testing library
 
 ## Code Quality
 
-- **pylint**: Linting with configuration in `.pylintrc`
-- Max line length: 100 characters
-- 4-space indentation
+- **clippy**: Rust linter with comprehensive lint checks
+- **rustfmt**: Code formatter with standard Rust style
+- Edition: 2024
 
 ## Common Commands
 
 ### Setup
 
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
+# Build the project
+cargo build
 
-# Install Playwright browsers
-playwright install chromium
+# Build optimized release binary
+cargo build --release
+
+# Install Chromium for browser automation
+# (chromiumoxide will download it automatically on first use)
 
 # Verify FFmpeg is installed
 ffmpeg -version
+
+# Verify yt-dlp is installed
+yt-dlp --version
 ```
 
 ### Testing
 
 ```bash
 # Run all tests
-pytest
+cargo test
 
 # Run with verbose output
-pytest -v
+cargo test -- --nocapture
 
-# Run specific test categories
-pytest -m unit          # Unit tests only
-pytest -m property      # Property-based tests only
-pytest -m integration   # Integration tests only
+# Run specific test module
+cargo test properties_utils
 
-# Run with coverage
-pytest --cov=core --cov=scrapers
+# Run property-based tests only
+cargo test properties
+
+# Run with test threads (parallel execution)
+cargo test -- --test-threads=4
+
+# Run tests with environment variable for proptest
+PROPTEST_CASES=100 cargo test
 ```
 
-### Linting
+### Linting and Formatting
 
 ```bash
-# Run pylint on all Python files
-pylint core/ scrapers/ tests/
+# Run clippy linter
+cargo clippy
 
-# Run on specific module
-pylint core/orchestrator.py
+# Run clippy with all warnings as errors
+cargo clippy -- -D warnings
+
+# Format code
+cargo fmt
+
+# Check formatting without modifying files
+cargo fmt -- --check
 ```
 
 ### Running the CLI
 
 ```bash
-# Basic usage (both mode - all sources)
-python main.py /path/to/tv_shows
-
-# TV shows only (TelevisionTunes, YouTube)
-python main.py /path/to/tv_shows --mode tv
-
-# Anime only (Themes.moe, AnimeThemes, YouTube)
-python main.py /path/to/anime --mode anime
-
-# YouTube only
-python main.py /path/to/shows --mode youtube
+# Basic usage (waterfall mode - all sources)
+cargo run -- /path/to/tv_shows
 
 # With options
-python main.py /path/to/tv_shows --mode tv --force --verbose
+cargo run -- /path/to/tv_shows --force --verbose
 
 # Dry run (no downloads)
-python main.py /path/to/tv_shows --dry-run
+cargo run -- /path/to/tv_shows --dry-run
+
+# Custom timeout
+cargo run -- /path/to/tv_shows --timeout 60
 
 # Show version
-python main.py --version
+cargo run -- --version
 
 # Show help
-python main.py --help
+cargo run -- --help
+
+# Run release build (optimized)
+cargo run --release -- /path/to/tv_shows
 ```
 
 ## Testing Configuration
 
-### pytest.ini
+### Cargo.toml test profile
 
-- Test discovery: `test_*.py`, `*_test.py`
-- Test paths: `tests/`
-- Markers: `unit`, `integration`, `property`, `slow`
-- Hypothesis profile: default with 100 examples
+```toml
+[dev-dependencies]
+proptest = "1.0"
 
-### Hypothesis Settings
+[profile.test]
+opt-level = 0
+```
 
-- Max examples: 100
-- Deadline: None (no time limit per test)
+### Proptest Settings
+
+- Default cases: 100 (configurable via `PROPTEST_CASES` environment variable)
+- Configurable via `proptest!` macro parameters
+- Shrinking enabled by default for minimal failing examples
+
+### Test Organization
+
+- Unit tests: `#[cfg(test)]` modules within source files
+- Property tests: `tests/properties_*.rs` files
+- Integration tests: `tests/integration_*.rs` files

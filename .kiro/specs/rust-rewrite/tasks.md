@@ -89,18 +89,18 @@ Rewrite Show Theme CLI from Python to Rust (2024 edition), preserving all existi
     - **Property 1: Invalid path rejection**
     - **Validates: Requirements 1.8**
 
-- [ ] 9. Update agent hooks and steering documents
-  - [ ] 9.1 Update `.kiro/hooks/code-quality-review.kiro.hook` to reference Rust idioms, Clippy lints, and `cargo fmt` instead of Python/PEP 8
+- [x] 9. Update agent hooks and steering documents
+  - [x] 9.1 Update `.kiro/hooks/code-quality-review.kiro.hook` to reference Rust idioms, Clippy lints, and `cargo fmt` instead of Python/PEP 8
     - _Requirements: 15.3_
-  - [ ] 9.2 Update `.kiro/hooks/production-code-review.kiro.hook` to reference Rust patterns, Clippy, cargo test, and Rust-specific concerns instead of Python
+  - [x] 9.2 Update `.kiro/hooks/production-code-review.kiro.hook` to reference Rust patterns, Clippy, cargo test, and Rust-specific concerns instead of Python
     - _Requirements: 15.3_
-  - [ ] 9.3 Update `.kiro/hooks/security-review-hook.kiro.hook` to reference Rust safety (unsafe blocks, memory safety, Command injection) instead of Python
+  - [x] 9.3 Update `.kiro/hooks/security-review-hook.kiro.hook` to reference Rust safety (unsafe blocks, memory safety, Command injection) instead of Python
     - _Requirements: 15.3_
-  - [ ] 9.4 Update `.kiro/steering/tech.md` to reflect Rust toolchain, Cargo commands, crate dependencies, and proptest configuration
+  - [x] 9.4 Update `.kiro/steering/tech.md` to reflect Rust toolchain, Cargo commands, crate dependencies, and proptest configuration
     - _Requirements: 15.4, 15.5_
-  - [ ] 9.5 Update `.kiro/steering/structure.md` to reflect the Rust project directory layout and module organization
+  - [x] 9.5 Update `.kiro/steering/structure.md` to reflect the Rust project directory layout and module organization
     - _Requirements: 15.4_
-  - [ ] 9.6 Update `.kiro/steering/product.md` to note the Rust implementation
+  - [x] 9.6 Update `.kiro/steering/product.md` to note the Rust implementation
     - _Requirements: 15.4_
 
 - [ ] 10. Final checkpoint - Ensure all tests pass

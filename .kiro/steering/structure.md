@@ -4,61 +4,67 @@
 
 ```
 .
-├── main.py                 # CLI entry point (Typer application)
-├── core/                   # Core orchestration and utilities
-│   ├── __init__.py
-│   ├── orchestrator.py     # Main processing logic and source coordination
-│   └── utils.py            # File system operations, path validation, audio processing
-├── scrapers/               # Source-specific scraper implementations
-│   ├── __init__.py
-│   ├── base.py             # ThemeScraper abstract base class
-│   ├── tv_tunes.py         # TelevisionTunes.co.uk scraper (Playwright)
-│   ├── anime_themes.py     # AnimeThemes.moe API scraper (httpx)
-│   ├── themes_moe.py       # Themes.moe scraper (Playwright)
-│   └── youtube.py          # YouTube fallback scraper (yt-dlp)
+├── Cargo.toml              # Rust project manifest with dependencies and metadata
+├── Cargo.lock              # Dependency lock file
+├── src/                    # Source code
+│   ├── main.rs             # CLI entry point (clap argument parsing, logging setup)
+│   ├── config.rs           # Configuration constants
+│   ├── orchestrator.rs     # Main processing logic and scraper coordination
+│   ├── utils.rs            # File system operations, path validation, sanitization
+│   ├── ffmpeg.rs           # FFmpeg subprocess wrapper and error parsing
+│   ├── rate_limiter.rs     # Rate limiting with jitter
+│   ├── retry.rs            # Generic retry with exponential backoff
+│   └── scrapers/           # Source-specific scraper implementations
+│       ├── mod.rs          # ThemeScraper trait definition and module exports
+│       ├── tv_tunes.rs     # TelevisionTunes.co.uk scraper (chromiumoxide)
+│       ├── anime_themes.rs # AnimeThemes.moe API scraper (reqwest)
+│       ├── themes_moe.rs   # Themes.moe scraper (chromiumoxide)
+│       └── youtube.rs      # YouTube fallback scraper (yt-dlp subprocess)
 ├── tests/                  # Test suite
-│   ├── __init__.py
-│   ├── unit/               # Unit tests for specific examples
-│   ├── properties/         # Property-based tests (Hypothesis)
-│   └── integration/        # End-to-end tests with mocked sources
+│   ├── properties_*.rs     # Property-based tests (proptest)
+│   ├── integration_*.rs    # Integration tests with mocked scrapers
+│   └── common/             # Shared test utilities and fixtures
+├── target/                 # Build artifacts (gitignored)
 ├── .kiro/                  # Kiro configuration
 │   ├── specs/              # Feature specifications
-│   └── steering/           # Project steering documents
-├── requirements.txt        # Python dependencies
-├── pytest.ini              # Pytest configuration
-└── .pylintrc               # Pylint configuration
+│   ├── steering/           # Project steering documents
+│   └── hooks/              # Agent hooks
+└── .gitignore              # Git ignore patterns
 ```
 
 ## Architecture Patterns
 
 ### Modular Scraper Design
 
-Each source is implemented as an independent scraper following the `ThemeScraper` interface:
+Each source is implemented as an independent scraper following the `ThemeScraper` trait:
 
-- `search_and_download(show_name, output_path) -> bool`: Main entry point
-- `get_source_name() -> str`: Human-readable source identifier
+```rust
+#[async_trait]
+pub trait ThemeScraper: Send + Sync {
+    async fn search_and_download(&self, show_name: &str, output_path: &Path) -> anyhow::Result<bool>;
+    fn source_name(&self) -> &str;
+}
+```
 
 Scrapers are completely independent and swappable. The orchestrator tries them in priority order until one succeeds.
 
 ### Orchestration Pattern
 
-The `Orchestrator` class coordinates the entire workflow:
+The `Orchestrator` struct coordinates the entire workflow:
 
 1. Scans directory for series folders
 2. Checks for existing theme files
-3. Tries scrapers in priority order based on content mode:
-   - TV Mode: TelevisionTunes → YouTube
-   - Anime Mode: AnimeThemes → Themes.moe → YouTube
-   - Both Mode: TelevisionTunes → AnimeThemes → Themes.moe → YouTube
+3. Tries scrapers in waterfall priority order:
+   - TelevisionTunes → AnimeThemes → Themes.moe → YouTube
 4. Aggregates results and displays summary
 
 ### Fail-Fast with Fallback
 
-Each scraper returns `True` on success or `False` on failure. The orchestrator immediately moves to the next source on failure. No retries within a single source (except for network timeouts).
+Each scraper returns `Ok(true)` on success or `Ok(false)` on failure. The orchestrator immediately moves to the next source on failure. Network errors trigger retry logic with exponential backoff.
 
-### Rich Console Output
+### Console Output
 
-All user-facing output uses Rich library for:
+All user-facing output uses indicatif and colored crates for:
 
 - Colored status indicators (green=success, yellow=skipped, red=failed)
 - Progress tracking with folder counts
@@ -68,31 +74,33 @@ All user-facing output uses Rich library for:
 
 ### Output Files
 
-- All theme files are saved as `theme.mp3` in a `theme-music` subfolder within each series folder
-- Temporary files use `temp_*.webm` pattern (cleaned up after processing)
+- All theme files are saved as `theme.mp3` in each series folder
+- Temporary files use `temp_*.webm` or `temp_*.wav` pattern (cleaned up after processing)
 
 ### Test Files
 
-- Unit tests: `test_*.py` or `*_test.py`
+- Property tests: `tests/properties_*.rs`
+- Integration tests: `tests/integration_*.rs`
 - Property tests must include property reference in comments:
-  ```python
-  # Feature: show-theme-cli, Property 1: Path Validation Correctness
+
+  ```rust
+  // Feature: rust-rewrite, Property 1: Invalid path rejection
   ```
 
 ### Module Organization
 
-- One class per file in `scrapers/`
-- Utility functions grouped by purpose in `core/utils.py`
-- Data models and enums in respective module files
+- One scraper per file in `src/scrapers/`
+- Utility functions grouped by purpose in dedicated modules (`utils.rs`, `ffmpeg.rs`, etc.)
+- Data models and enums defined in respective module files
 
 ## Key Design Principles
 
 ### Separation of Concerns
 
-- CLI layer (main.py): Argument parsing and console setup
-- Orchestration layer (core/): Business logic and coordination
+- CLI layer (main.rs): Argument parsing and console setup
+- Orchestration layer (orchestrator.rs): Business logic and coordination
 - Scraper layer (scrapers/): Source-specific implementation
-- Utility layer (core/utils.py): Shared functionality
+- Utility layer (utils.rs, ffmpeg.rs, etc.): Shared functionality
 
 ### Idempotency
 
@@ -103,33 +111,58 @@ The tool can be safely re-run on the same directory:
 
 ### Error Isolation
 
-Errors in one show don't affect processing of other shows. Each series folder is processed independently with comprehensive error handling.
+Errors in one show don't affect processing of other shows. Each series folder is processed independently with comprehensive error handling using `anyhow::Result`.
 
 ### Testability
 
-- Abstract base class enables easy mocking of scrapers
-- File system operations use Path objects for easy temp directory testing
+- Trait-based design enables easy mocking of scrapers
+- File system operations use `Path` and `PathBuf` for easy temp directory testing
 - Network operations can be intercepted for testing
+- Property-based tests validate universal correctness properties
 
 ## Configuration Files
 
-### .pylintrc
+### Cargo.toml
 
-- Max line length: 100
-- Indentation: 4 spaces
-- Disabled warnings: missing-docstring, invalid-name, too-few-public-methods
-
-### pytest.ini
-
-- Test markers: `unit`, `integration`, `property`, `slow`
-- Hypothesis: 100 examples per property test
-- Output: verbose with short tracebacks
+- Edition: 2024
+- Dependencies: clap, reqwest, tokio, chromiumoxide, indicatif, colored, anyhow, thiserror, tracing, strsim, proptest, etc.
+- Binary target: `show-theme-cli`
 
 ### .gitignore
 
-- Python artifacts: `__pycache__/`, `*.pyc`, `.pytest_cache/`
-- Virtual environments: `venv/`, `.venv/`
-- Output folders: `theme-music/`
-- Temporary files: `temp_*.webm`
+- Rust artifacts: `target/`, `Cargo.lock` (for libraries, included for binaries)
+- Temporary files: `temp_*.webm`, `temp_*.wav`
 - Log files: `*.log`
-- IDE files: `.vscode/`, `.idea/`
+- IDE files: `.vscode/`, `.idea/`, `*.swp`
+- OS files: `.DS_Store`, `Thumbs.db`
+
+### rustfmt.toml (optional)
+
+- Standard Rust formatting rules
+- Max line width: 100 (default)
+
+## Rust-Specific Patterns
+
+### Error Handling
+
+- Application-level errors use `anyhow::Result` for flexibility
+- Domain-specific errors use `thiserror` derive macros
+- FFmpeg errors are categorized into typed enum variants
+
+### Async/Await
+
+- Tokio runtime for async operations
+- `async_trait` for trait methods
+- Sequential processing to maintain console output order
+
+### Resource Cleanup
+
+- `Drop` implementations for browser instances
+- `scopeguard` for temporary file cleanup
+- RAII pattern for resource management
+
+### Type Safety
+
+- Strong typing for configuration constants
+- Enum variants for scraper outcomes and error types
+- Path types (`Path`, `PathBuf`) for file system operations
