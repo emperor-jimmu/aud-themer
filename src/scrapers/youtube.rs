@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-use std::path::Path;
-use anyhow::{Result, Context};
-use tokio::process::Command;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use tokio::process::Command;
 
 use super::ThemeScraper;
 use crate::config::Config;
@@ -45,10 +45,10 @@ impl YouTubeScraper {
 
     async fn search_youtube(&self, query: &str) -> Result<Option<VideoInfo>> {
         tracing::info!("[YouTube] Searching for: {}", query);
-        
+
         // Sanitize query for subprocess
-        let safe_query = sanitize_for_subprocess(query, 200)
-            .context("Failed to sanitize search query")?;
+        let safe_query =
+            sanitize_for_subprocess(query, 200).context("Failed to sanitize search query")?;
 
         // Use yt-dlp to search and get video info
         let output = Command::new("yt-dlp")
@@ -68,10 +68,10 @@ impl YouTubeScraper {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
+
         // Parse JSON output
-        let video_info: VideoInfo = serde_json::from_str(&stdout)
-            .context("Failed to parse yt-dlp JSON output")?;
+        let video_info: VideoInfo =
+            serde_json::from_str(&stdout).context("Failed to parse yt-dlp JSON output")?;
 
         if let Some(ref title) = video_info.title {
             tracing::info!("[YouTube] Found video: {}", title);
@@ -85,9 +85,9 @@ impl YouTubeScraper {
 
     async fn download_audio(&self, video_id: &str, output_path: &Path) -> Result<()> {
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
-        
+
         tracing::info!("[YouTube] Downloading audio from: {}", url);
-        
+
         // Use yt-dlp to download and extract audio as MP3
         let output = Command::new("yt-dlp")
             .arg("--extract-audio")
@@ -96,8 +96,12 @@ impl YouTubeScraper {
             .arg("--audio-quality")
             .arg("0") // Best quality
             .arg("--output")
-            .arg(output_path.with_extension("").to_str()
-                .ok_or_else(|| anyhow::anyhow!("Invalid output path: non-UTF-8 characters"))?)
+            .arg(
+                output_path
+                    .with_extension("")
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid output path: non-UTF-8 characters"))?,
+            )
             .arg(&url)
             .output()
             .await
@@ -109,7 +113,10 @@ impl YouTubeScraper {
             anyhow::bail!("yt-dlp download failed: {}", stderr);
         }
 
-        tracing::info!("[YouTube] Successfully downloaded to: {}", output_path.display());
+        tracing::info!(
+            "[YouTube] Successfully downloaded to: {}",
+            output_path.display()
+        );
         Ok(())
     }
 }
@@ -124,13 +131,18 @@ impl Default for YouTubeScraper {
 impl ThemeScraper for YouTubeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
         tracing::info!("[YouTube] Starting search for: {}", show_name);
-        
+
         let queries = Self::generate_search_queries(show_name);
         tracing::info!("[YouTube] Generated {} search queries", queries.len());
 
         for (idx, query) in queries.iter().enumerate() {
-            tracing::info!("[YouTube] Trying query {}/{}: {}", idx + 1, queries.len(), query);
-            
+            tracing::info!(
+                "[YouTube] Trying query {}/{}: {}",
+                idx + 1,
+                queries.len(),
+                query
+            );
+
             // Search for video
             let video_info = match self.search_youtube(query).await? {
                 Some(info) => info,
@@ -141,12 +153,15 @@ impl ThemeScraper for YouTubeScraper {
             };
 
             // Check duration
-            if let Some(duration) = video_info.duration {
-                if !Self::is_duration_acceptable(duration) {
-                    tracing::warn!("[YouTube] Video duration {:.1}s exceeds maximum {}s, skipping", 
-                        duration, Config::MAX_VIDEO_DURATION_SEC);
-                    continue; // Try next query
-                }
+            if let Some(duration) = video_info.duration
+                && !Self::is_duration_acceptable(duration)
+            {
+                tracing::warn!(
+                    "[YouTube] Video duration {:.1}s exceeds maximum {}s, skipping",
+                    duration,
+                    Config::MAX_VIDEO_DURATION_SEC
+                );
+                continue; // Try next query
             }
 
             // Get video ID

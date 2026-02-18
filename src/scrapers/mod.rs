@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use std::path::Path;
 
 pub mod anime_themes;
-pub mod tv_tunes;
 pub mod themes_moe;
+pub mod tv_tunes;
 pub mod youtube;
 
 /// Outcome of a scraper operation
@@ -21,11 +21,11 @@ pub enum ScraperOutcome {
 #[async_trait]
 pub trait ThemeScraper: Send + Sync {
     /// Search for and download a theme song.
-    /// 
+    ///
     /// # Arguments
     /// * `show_name` - The name of the show to search for
     /// * `output_path` - The path where the theme file should be saved
-    /// 
+    ///
     /// # Returns
     /// * `Ok(true)` - Theme was successfully downloaded
     /// * `Ok(false)` - Theme was not found at this source

@@ -1,7 +1,7 @@
+use rand::Rng;
 use std::collections::HashMap;
 use std::time::Instant;
-use tokio::time::{sleep, Duration};
-use rand::Rng;
+use tokio::time::{Duration, sleep};
 
 use crate::config::Config;
 
@@ -34,25 +34,34 @@ impl RateLimiter {
     /// Wait if necessary before making a request to the given source
     pub async fn wait_if_needed(&mut self, source: &str) {
         let now = Instant::now();
-        
-        if let Some(&last_time) = self.last_attempt.get(source) {
+
+        // Calculate required delay
+        let delay_ms = if let Some(&last_time) = self.last_attempt.get(source) {
             let elapsed = now.duration_since(last_time);
             let min_delay = Duration::from_millis(self.min_delay_ms);
-            
+
             if elapsed < min_delay {
+                // Need to wait for remaining time plus jitter
                 let remaining = min_delay.saturating_sub(elapsed);
-                sleep(remaining).await;
+                let jitter_ms = {
+                    let mut rng = rand::thread_rng();
+                    rng.gen_range(0..=(self.max_delay_ms - self.min_delay_ms))
+                };
+                remaining.as_millis() as u64 + jitter_ms
+            } else {
+                // Enough time has passed, just add jitter
+                let mut rng = rand::thread_rng();
+                rng.gen_range(0..=(self.max_delay_ms - self.min_delay_ms))
             }
-        }
-        
-        // Add random jitter between min and max delay
-        // Scope the RNG so it's dropped before the await (Send safety)
-        let jitter_ms = {
+        } else {
+            // First request to this source, use random delay between min and max
             let mut rng = rand::thread_rng();
             rng.gen_range(self.min_delay_ms..=self.max_delay_ms)
         };
-        sleep(Duration::from_millis(jitter_ms)).await;
-        
+
+        // Wait for the calculated delay
+        sleep(Duration::from_millis(delay_ms)).await;
+
         // Record this attempt
         self.last_attempt.insert(source.to_string(), Instant::now());
     }
@@ -71,11 +80,11 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_enforces_delay() {
         let mut limiter = RateLimiter::with_delays(100, 200);
-        
+
         let start = Instant::now();
         limiter.wait_if_needed("test_source").await;
         let elapsed = start.elapsed();
-        
+
         // Should wait at least min_delay_ms
         assert!(elapsed.as_millis() >= 100);
     }
@@ -83,15 +92,15 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_different_sources() {
         let mut limiter = RateLimiter::with_delays(50, 100);
-        
+
         // First source
         limiter.wait_if_needed("source1").await;
-        
+
         // Second source should not be affected by first
         let start = Instant::now();
         limiter.wait_if_needed("source2").await;
         let elapsed = start.elapsed();
-        
+
         // Should still enforce delay for new source
         assert!(elapsed.as_millis() >= 50);
     }

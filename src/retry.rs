@@ -1,5 +1,5 @@
-use tokio::time::{sleep, Duration};
 use std::fmt::Display;
+use tokio::time::{Duration, sleep};
 
 /// Retry an async operation with exponential backoff
 ///
@@ -23,10 +23,10 @@ where
 {
     let mut attempt = 0;
     let mut delay_ms = 1000u64; // Start with 1 second delay
-    
+
     loop {
         attempt += 1;
-        
+
         match operation().await {
             Ok(result) => {
                 if attempt > 1 {
@@ -36,16 +36,25 @@ where
             }
             Err(e) => {
                 if attempt >= max_attempts {
-                    tracing::error!("[Retry] All {} attempts failed. Last error: {}", max_attempts, e);
+                    tracing::error!(
+                        "[Retry] All {} attempts failed. Last error: {}",
+                        max_attempts,
+                        e
+                    );
                     return Err(e);
                 }
-                
-                tracing::warn!("[Retry] Attempt {}/{} failed: {}. Retrying in {}ms...", 
-                    attempt, max_attempts, e, delay_ms);
-                
+
+                tracing::warn!(
+                    "[Retry] Attempt {}/{} failed: {}. Retrying in {}ms...",
+                    attempt,
+                    max_attempts,
+                    e,
+                    delay_ms
+                );
+
                 // Wait before retrying
                 sleep(Duration::from_millis(delay_ms)).await;
-                
+
                 // Increase delay for next attempt
                 delay_ms = (delay_ms as f64 * backoff_factor) as u64;
             }
@@ -56,8 +65,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[tokio::test]
     async fn test_retry_succeeds_on_first_attempt() {
@@ -69,7 +78,7 @@ mod tests {
     async fn test_retry_succeeds_after_failures() {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
-        
+
         let result = retry_with_backoff(3, 2.0, move || {
             let c = counter_clone.clone();
             async move {
@@ -82,7 +91,7 @@ mod tests {
             }
         })
         .await;
-        
+
         assert_eq!(result, Ok(42));
         assert_eq!(counter.load(Ordering::SeqCst), 3);
     }
@@ -91,7 +100,7 @@ mod tests {
     async fn test_retry_fails_after_max_attempts() {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
-        
+
         let result = retry_with_backoff(3, 2.0, move || {
             let c = counter_clone.clone();
             async move {
@@ -100,7 +109,7 @@ mod tests {
             }
         })
         .await;
-        
+
         assert!(result.is_err());
         assert_eq!(counter.load(Ordering::SeqCst), 3);
     }

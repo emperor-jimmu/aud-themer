@@ -1,12 +1,13 @@
+use anyhow::{Context, Result};
 use async_trait::async_trait;
+use reqwest::Client;
 use std::path::Path;
-use anyhow::{Result, Context};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
 use super::ThemeScraper;
 use crate::browser::SharedBrowser;
-use crate::config::Config;
+use crate::config::{Config, USER_AGENT};
 use crate::ffmpeg::convert_audio;
 use crate::retry::retry_with_backoff;
 
@@ -14,18 +15,26 @@ const BASE_URL: &str = "https://themes.moe";
 
 pub struct ThemesMoeScraper {
     browser: SharedBrowser,
+    client: Client,
 }
 
 impl ThemesMoeScraper {
     /// Create a new `ThemesMoeScraper` with a shared browser instance
     #[must_use]
     pub fn new(browser: SharedBrowser) -> Self {
-        Self { browser }
+        let client = Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
+            .user_agent(USER_AGENT.as_str())
+            .build()
+            .expect("Failed to build HTTP client");
+
+        Self { browser, client }
     }
 
     async fn search_anime(&self, show_name: &str) -> Result<Option<String>> {
         tracing::info!("[Themes.moe] Starting search for: {}", show_name);
-        
+
         let browser_arc = self.browser.get().await?;
         let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
@@ -34,11 +43,13 @@ impl ThemesMoeScraper {
             Config::MAX_RETRY_ATTEMPTS,
             Config::RETRY_BACKOFF_FACTOR,
             || async {
-                browser.new_page("about:blank")
+                browser
+                    .new_page("about:blank")
                     .await
                     .context("Failed to create new page")
-            }
-        ).await?;
+            },
+        )
+        .await?;
 
         // Navigate to Themes.moe
         tracing::info!("[Themes.moe] Navigating to: {}", BASE_URL);
@@ -58,42 +69,49 @@ impl ThemesMoeScraper {
 
         if let Ok(button) = mode_button {
             tracing::info!("[Themes.moe] Clicking mode selector");
-            button.click()
+            button
+                .click()
                 .await
                 .context("Failed to click mode selector")?;
-            
+
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
             // Click "Anime Search" option from the dropdown
-            let anime_search_option = page.find_element("*:has-text('Anime Search')")
-                .await;
-            
+            let anime_search_option = page.find_element("*:has-text('Anime Search')").await;
+
             if let Ok(option) = anime_search_option {
                 tracing::info!("[Themes.moe] Selecting Anime Search mode");
-                option.click()
+                option
+                    .click()
                     .await
                     .context("Failed to select Anime Search mode")?;
-                
+
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }
         }
 
         // Find search input (combobox)
         tracing::info!("[Themes.moe] Entering search query: {}", show_name);
-        let search_input = page.find_element("input[type='search'], input[role='combobox'], input[placeholder*='search']")
+        let search_input = page
+            .find_element(
+                "input[type='search'], input[role='combobox'], input[placeholder*='search']",
+            )
             .await
             .context("Failed to find search input")?;
 
-        search_input.click()
+        search_input
+            .click()
             .await
             .context("Failed to click search input")?;
 
         // Clear any existing text and type the show name
-        search_input.type_str(show_name)
+        search_input
+            .type_str(show_name)
             .await
             .context("Failed to type show name")?;
 
-        search_input.press_key("Enter")
+        search_input
+            .press_key("Enter")
             .await
             .context("Failed to submit search")?;
 
@@ -102,9 +120,8 @@ impl ThemesMoeScraper {
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
         // Check if we got "No anime found" message
-        let no_results = page.find_element("p:has-text('No anime found')")
-            .await;
-        
+        let no_results = page.find_element("p:has-text('No anime found')").await;
+
         if no_results.is_ok() {
             tracing::info!("[Themes.moe] No anime found for: {}", show_name);
             return Ok(None);
@@ -113,7 +130,8 @@ impl ThemesMoeScraper {
         // Look for OP theme links in the table
         // The structure is: table > tbody > tr > td > a[href*='.webm']
         // We want links that contain 'OP' in the text or href
-        let op_links = page.find_elements("table a[href*='.webm']")
+        let op_links = page
+            .find_elements("table a[href*='.webm']")
             .await
             .unwrap_or_default();
 
@@ -126,24 +144,22 @@ impl ThemesMoeScraper {
 
         // Find the first OP link (OP1, OP2, etc.)
         for link in &op_links {
-            if let Ok(Some(text)) = link.inner_text().await {
-                if text.to_uppercase().starts_with("OP") {
-                    if let Ok(Some(href)) = link.attribute("href").await {
-                        tracing::info!("[Themes.moe] Found OP theme: {} -> {}", text, href);
-                        return Ok(Some(href));
-                    }
-                }
+            if let Ok(Some(text)) = link.inner_text().await
+                && text.to_uppercase().starts_with("OP")
+                && let Ok(Some(href)) = link.attribute("href").await
+            {
+                tracing::info!("[Themes.moe] Found OP theme: {} -> {}", text, href);
+                return Ok(Some(href));
             }
         }
 
         // If no OP found, try getting href from first link and check if it contains OP
-        if let Some(first_link) = op_links.first() {
-            if let Ok(Some(href)) = first_link.attribute("href").await {
-                if href.to_uppercase().contains("OP") {
-                    tracing::info!("[Themes.moe] Found OP theme URL: {}", href);
-                    return Ok(Some(href));
-                }
-            }
+        if let Some(first_link) = op_links.first()
+            && let Ok(Some(href)) = first_link.attribute("href").await
+            && href.to_uppercase().contains("OP")
+        {
+            tracing::info!("[Themes.moe] Found OP theme URL: {}", href);
+            return Ok(Some(href));
         }
 
         tracing::info!("[Themes.moe] No OP themes found for: {}", show_name);
@@ -153,14 +169,9 @@ impl ThemesMoeScraper {
     async fn download_media(&self, url: &str, output_path: &Path) -> Result<bool> {
         tracing::info!("[Themes.moe] Downloading media from: {}", url);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
-            .user_agent(Config::USER_AGENT)
-            .build()
-            .context("Failed to build HTTP client")?;
-            
-        let response = client.get(url)
+        let response = self
+            .client
+            .get(url)
             .send()
             .await
             .context("Failed to download media file")?;
@@ -173,7 +184,8 @@ impl ThemesMoeScraper {
             return Ok(false);
         }
 
-        let bytes = response.bytes()
+        let bytes = response
+            .bytes()
             .await
             .context("Failed to read media bytes")?;
 
@@ -181,19 +193,22 @@ impl ThemesMoeScraper {
 
         // Save to temporary video file
         let temp_video = output_path.with_extension("temp.webm");
-        let mut file = fs::File::create(&temp_video).await
+        let mut file = fs::File::create(&temp_video)
+            .await
             .context("Failed to create temp video file")?;
-        file.write_all(&bytes).await
+        file.write_all(&bytes)
+            .await
             .context("Failed to write temp video file")?;
 
         // Convert to MP3
         tracing::info!("[Themes.moe] Converting to MP3");
-        convert_audio(&temp_video, output_path, Config::AUDIO_BITRATE).await
+        convert_audio(&temp_video, output_path, Config::AUDIO_BITRATE)
+            .await
             .context("Failed to convert video to MP3")?;
 
         // Clean up temp file
         let _ = fs::remove_file(&temp_video).await;
-        
+
         tracing::info!("[Themes.moe] Successfully downloaded and converted theme");
         Ok(true)
     }
@@ -203,7 +218,7 @@ impl ThemesMoeScraper {
 impl ThemeScraper for ThemesMoeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
         tracing::info!("[Themes.moe] Starting search for: {}", show_name);
-        
+
         let Some(media_url) = self.search_anime(show_name).await? else {
             tracing::info!("[Themes.moe] No theme found for: {}", show_name);
             return Ok(false);

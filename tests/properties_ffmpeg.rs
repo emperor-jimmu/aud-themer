@@ -1,8 +1,8 @@
 // Feature: rust-rewrite, Property tests for FFmpeg module
 
 use proptest::prelude::*;
-use show_theme_cli::ffmpeg::*;
 use show_theme_cli::config::Config;
+use show_theme_cli::ffmpeg::*;
 use std::path::PathBuf;
 
 // Feature: rust-rewrite, Property 12: FFmpeg command construction
@@ -27,15 +27,13 @@ proptest! {
         // Verify the function signature accepts Path types
         let input_path = PathBuf::from(&input_name);
         let output_path = PathBuf::from(&output_name);
-        
-        // We can't actually run FFmpeg in property tests, but we verify
-        // the types are correct and the function is callable
-        let _input: &std::path::Path = &input_path;
-        let _output: &std::path::Path = &output_path;
-        let _bitrate: &str = Config::AUDIO_BITRATE;
-        
-        // This property verifies the API contract
-        prop_assert!(true);
+
+        // Verify paths are valid UTF-8 and can be used with FFmpeg
+        prop_assert!(input_path.to_str().is_some(), "Input path should be valid UTF-8");
+        prop_assert!(output_path.to_str().is_some(), "Output path should be valid UTF-8");
+
+        // Verify output has .mp3 extension
+        prop_assert_eq!(output_path.extension().and_then(|s| s.to_str()), Some("mp3"));
     }
 }
 
@@ -139,7 +137,7 @@ proptest! {
             .replace("header", "")
             .replace("unsupported", "")
             .replace("format", "");
-        
+
         if !safe_text.trim().is_empty() {
             let error_type = FfmpegErrorParser::categorize_error(&safe_text);
             prop_assert_eq!(error_type, FfmpegErrorType::Unknown);

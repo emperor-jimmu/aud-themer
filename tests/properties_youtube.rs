@@ -2,8 +2,8 @@
 // Feature: rust-rewrite, Property 11: YouTube duration filtering
 
 use proptest::prelude::*;
-use show_theme_cli::scrapers::youtube::YouTubeScraper;
 use show_theme_cli::config::Config;
+use show_theme_cli::scrapers::youtube::YouTubeScraper;
 
 // Property 10: YouTube search query generation
 proptest! {
@@ -12,7 +12,7 @@ proptest! {
         show_name in "[a-zA-Z0-9 ]{3,50}"
     ) {
         let queries = YouTubeScraper::generate_search_queries(&show_name);
-        
+
         // All queries should contain the show name as a substring
         for query in &queries {
             prop_assert!(
@@ -29,7 +29,7 @@ proptest! {
         show_name in "[a-zA-Z0-9 ]{3,50}"
     ) {
         let queries = YouTubeScraper::generate_search_queries(&show_name);
-        
+
         // Should include at least the "theme song" variation
         let has_theme_song = queries.iter().any(|q| q.contains("theme song"));
         prop_assert!(
@@ -43,7 +43,7 @@ proptest! {
         show_name in "[a-zA-Z0-9 ]{1,50}"
     ) {
         let queries = YouTubeScraper::generate_search_queries(&show_name);
-        
+
         // Should return at least one query
         prop_assert!(
             !queries.is_empty(),
@@ -56,7 +56,7 @@ proptest! {
         show_name in "[a-zA-Z0-9 ]{3,50}"
     ) {
         let queries = YouTubeScraper::generate_search_queries(&show_name);
-        
+
         // All queries should be non-empty
         for query in &queries {
             prop_assert!(
@@ -99,14 +99,14 @@ proptest! {
     ) {
         // Test exact boundary
         let max_duration = Config::MAX_VIDEO_DURATION_SEC as f64;
-        
+
         // Exactly at max should be acceptable
         prop_assert!(
             YouTubeScraper::is_duration_acceptable(max_duration),
             "Duration exactly at {} seconds should be acceptable",
             max_duration
         );
-        
+
         // Just over max should be rejected
         prop_assert!(
             !YouTubeScraper::is_duration_acceptable(max_duration + 0.1),

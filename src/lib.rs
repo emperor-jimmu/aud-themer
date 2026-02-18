@@ -1,11 +1,11 @@
 pub mod browser;
 pub mod config;
-pub mod utils;
-pub mod scrapers;
 pub mod ffmpeg;
-pub mod retry;
-pub mod rate_limiter;
 pub mod orchestrator;
+pub mod rate_limiter;
+pub mod retry;
+pub mod scrapers;
+pub mod utils;
 
 use std::path::Path;
 

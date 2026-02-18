@@ -2,7 +2,7 @@
 // Feature: rust-rewrite, Property 9: Theme type priority selection
 
 use proptest::prelude::*;
-use show_theme_cli::scrapers::anime_themes::{AnimeThemesScraper, Anime, AnimeTheme};
+use show_theme_cli::scrapers::anime_themes::{Anime, AnimeTheme, AnimeThemesScraper};
 
 // Property 8: Best match selection by string similarity
 proptest! {
@@ -34,7 +34,7 @@ proptest! {
                     &anime.name.to_lowercase(),
                     &query.to_lowercase()
                 );
-                
+
                 // The best match should have a score >= all others
                 prop_assert!(
                     best_score >= score,
@@ -105,7 +105,7 @@ proptest! {
 
         let selected = AnimeThemesScraper::select_best_theme(&themes);
         prop_assert!(selected.is_some(), "Should select a theme");
-        
+
         if let Some(theme) = selected {
             prop_assert_eq!(
                 theme.slug.to_uppercase(),
@@ -142,7 +142,7 @@ proptest! {
 
         let selected = AnimeThemesScraper::select_best_theme(&themes);
         prop_assert!(selected.is_some(), "Should select a theme");
-        
+
         if let Some(theme) = selected {
             prop_assert_eq!(
                 theme.theme_type.to_uppercase(),
@@ -171,7 +171,7 @@ proptest! {
 
         let selected = AnimeThemesScraper::select_best_theme(&themes);
         prop_assert!(selected.is_some(), "Should select a theme");
-        
+
         if let Some(theme) = selected {
             prop_assert_eq!(
                 &theme.slug,

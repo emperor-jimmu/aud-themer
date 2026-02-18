@@ -38,14 +38,14 @@ proptest! {
     fn prop_file_size_validation(size in 0u64..2_000_000u64) {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.bin");
-        
+
         // Create file with exact size
         let mut file = File::create(&file_path).unwrap();
         file.write_all(&vec![0u8; size as usize]).unwrap();
         drop(file);
-        
+
         let result = validate_file_size(&file_path, 500_000);
-        
+
         if size >= 500_000 {
             prop_assert!(result, "File with size {} should pass validation", size);
         } else {
@@ -71,10 +71,10 @@ proptest! {
         for ch in dangerous_chars {
             input.push(ch);
         }
-        
+
         if input.len() <= 200 {
             let result = sanitize_for_subprocess(&input, 200);
-            
+
             if let Ok(sanitized) = result {
                 // Verify no dangerous characters remain
                 prop_assert!(!sanitized.contains(';'));
@@ -134,7 +134,7 @@ proptest! {
     ) {
         let mut name = "a".repeat(50 - special_count);
         name.push_str(&"!".repeat(special_count));
-        
+
         // More than 50% special characters should be rejected
         prop_assert!(!validate_show_name(&name), "Names with >50% special chars should be rejected");
     }

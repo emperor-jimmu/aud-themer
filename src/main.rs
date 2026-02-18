@@ -2,35 +2,28 @@ use clap::Parser;
 use colored::Colorize;
 use show_theme_cli::browser::SharedBrowser;
 use show_theme_cli::orchestrator::{Orchestrator, OrchestratorConfig};
+use show_theme_cli::scrapers::ThemeScraper;
 use show_theme_cli::scrapers::anime_themes::AnimeThemesScraper;
 use show_theme_cli::scrapers::themes_moe::ThemesMoeScraper;
 use show_theme_cli::scrapers::tv_tunes::TvTunesScraper;
 use show_theme_cli::scrapers::youtube::YouTubeScraper;
-use show_theme_cli::scrapers::ThemeScraper;
 use show_theme_cli::validate_input_path;
 use std::path::PathBuf;
 use std::process::{self, Command};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 /// Content mode for source selection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Default)]
 pub enum ContentMode {
     /// TV shows only (TelevisionTunes + YouTube)
     Tv,
     /// Anime only (AnimeThemes + Themes.moe + YouTube)
     Anime,
     /// Both TV and anime (all sources)
+    #[default]
     Both,
-}
-
-impl Default for ContentMode {
-    fn default() -> Self {
-        Self::Both
-    }
 }
 
 /// Show Theme CLI - Automate theme song downloads for TV shows and anime
@@ -90,8 +83,14 @@ fn validate_dependencies() -> Result<(), String> {
 
     // Check for chromium (used by chromiumoxide)
     // Note: chromiumoxide can download chromium automatically, so we just warn
-    if !check_dependency("chromium") && !check_dependency("chromium-browser") && !check_dependency("google-chrome") {
-        eprintln!("{} Chromium not found in PATH. Browser automation will attempt to download it automatically.", "Warning:".yellow());
+    if !check_dependency("chromium")
+        && !check_dependency("chromium-browser")
+        && !check_dependency("google-chrome")
+    {
+        eprintln!(
+            "{} Chromium not found in PATH. Browser automation will attempt to download it automatically.",
+            "Warning:".yellow()
+        );
     }
 
     if !missing.is_empty() {
@@ -107,42 +106,51 @@ fn validate_dependencies() -> Result<(), String> {
 /// Initialize tracing/logging based on verbosity
 fn init_logging(verbose: bool) {
     let log_level = if verbose { "debug" } else { "info" };
-    
+
     // Filter out noisy chromiumoxide errors that don't affect functionality
     // Set chromiumoxide modules to 'off' to completely suppress their logs
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            EnvFilter::new(log_level)
-                .add_directive("chromiumoxide::conn=off".parse().unwrap())
-                .add_directive("chromiumoxide::handler=off".parse().unwrap())
-        });
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new(log_level)
+            .add_directive("chromiumoxide::conn=off".parse().unwrap())
+            .add_directive("chromiumoxide::handler=off".parse().unwrap())
+    });
 
-    // Create log file with timestamp
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let log_file = format!("{}.log", timestamp);
-
-    // Set up file logging
-    let file_appender = tracing_appender::rolling::never(".", &log_file);
-    
-    // Set up console logging (only for verbose mode)
-    let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(file_appender)
-        .with_ansi(false)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Failed to set tracing subscriber");
-
+    // Only create log files in verbose mode to avoid littering the directory
     if verbose {
+        // Create log file with timestamp
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let log_file = format!("{}.log", timestamp);
+
+        // Set up file logging
+        let file_appender = tracing_appender::rolling::never(".", &log_file);
+
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_writer(file_appender)
+            .with_ansi(false)
+            .finish();
+
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("Failed to set tracing subscriber");
+
         println!("{} Logging to {}", "ℹ".blue(), log_file);
+    } else {
+        // Non-verbose mode: log to stderr only
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .with_ansi(false)
+            .finish();
+
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("Failed to set tracing subscriber");
     }
 }
 
 /// Initialize scrapers based on content mode
 fn init_scrapers(mode: ContentMode) -> Vec<Box<dyn ThemeScraper>> {
     let shared_browser = SharedBrowser::new();
-    
+
     match mode {
         ContentMode::Tv => {
             // TV mode: TelevisionTunes + YouTube
@@ -206,19 +214,22 @@ async fn main() {
     info!("Input directory: {}", input_dir.display());
 
     // Set up Ctrl+C handler
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    
     ctrlc::set_handler(move || {
-        eprintln!("\n{} Interrupted by user. Exiting gracefully...", "⚠".yellow());
-        r.store(false, Ordering::SeqCst);
+        eprintln!(
+            "\n{} Interrupted by user. Exiting gracefully...",
+            "⚠".yellow()
+        );
         process::exit(130); // Standard exit code for SIGINT
     })
     .expect("Error setting Ctrl-C handler");
 
     // Display banner
     println!("\n{}", "═".repeat(60));
-    println!("{} {}", "Show Theme CLI".bold().cyan(), format!("v{}", env!("CARGO_PKG_VERSION")).dimmed());
+    println!(
+        "{} {}",
+        "Show Theme CLI".bold().cyan(),
+        format!("v{}", env!("CARGO_PKG_VERSION")).dimmed()
+    );
     println!("{}", "═".repeat(60));
 
     // Create orchestrator config
@@ -244,7 +255,7 @@ async fn main() {
         Ok(_) => {
             let elapsed = start_time.elapsed();
             let results = orchestrator.results();
-            
+
             info!(
                 "Processing complete: {} success, {} skipped, {} failed",
                 results.success, results.skipped, results.failed
@@ -290,7 +301,7 @@ mod tests {
         fs::write(&temp_file, "test").unwrap();
 
         let result = validate_input_path(&temp_file);
-        
+
         // Clean up
         fs::remove_file(&temp_file).ok();
 

@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::process::Stdio;
-use tokio::process::Command;
-use tokio::time::{timeout, Duration};
 use thiserror::Error;
+use tokio::process::Command;
+use tokio::time::{Duration, timeout};
 
 use crate::config::Config;
 
@@ -34,7 +34,7 @@ impl FfmpegErrorParser {
     /// Categorize FFmpeg error from stderr output
     pub fn categorize_error(stderr: &str) -> FfmpegErrorType {
         let stderr_lower = stderr.to_lowercase();
-        
+
         // Check for specific error patterns
         if stderr_lower.contains("unknown encoder")
             || stderr_lower.contains("encoder not found")
@@ -42,19 +42,15 @@ impl FfmpegErrorParser {
         {
             return FfmpegErrorType::MissingCodec;
         }
-        
-        if stderr_lower.contains("no space left on device")
-            || stderr_lower.contains("disk full")
-        {
+
+        if stderr_lower.contains("no space left on device") || stderr_lower.contains("disk full") {
             return FfmpegErrorType::DiskSpace;
         }
-        
-        if stderr_lower.contains("permission denied")
-            || stderr_lower.contains("access denied")
-        {
+
+        if stderr_lower.contains("permission denied") || stderr_lower.contains("access denied") {
             return FfmpegErrorType::PermissionDenied;
         }
-        
+
         if stderr_lower.contains("invalid data found")
             || stderr_lower.contains("corrupt")
             || stderr_lower.contains("truncated")
@@ -62,29 +58,29 @@ impl FfmpegErrorParser {
         {
             return FfmpegErrorType::CorruptedInput;
         }
-        
+
         if stderr_lower.contains("invalid argument")
             || stderr_lower.contains("unsupported")
             || stderr_lower.contains("unknown format")
         {
             return FfmpegErrorType::InvalidFormat;
         }
-        
+
         FfmpegErrorType::Unknown
     }
 }
 
 /// Convert audio/video file to MP3 format using FFmpeg
-pub async fn convert_audio(
-    input: &Path,
-    output: &Path,
-    bitrate: &str,
-) -> Result<(), FfmpegError> {
-    tracing::info!("[FFmpeg] Converting {} to {}", input.display(), output.display());
+pub async fn convert_audio(input: &Path, output: &Path, bitrate: &str) -> Result<(), FfmpegError> {
+    tracing::info!(
+        "[FFmpeg] Converting {} to {}",
+        input.display(),
+        output.display()
+    );
     tracing::info!("[FFmpeg] Using bitrate: {}", bitrate);
-    
+
     let timeout_duration = Duration::from_secs(Config::FFMPEG_TIMEOUT_SEC);
-    
+
     let command_future = Command::new("ffmpeg")
         .arg("-i")
         .arg(input)
@@ -98,9 +94,9 @@ pub async fn convert_audio(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output();
-    
+
     let result = timeout(timeout_duration, command_future).await;
-    
+
     match result {
         Ok(Ok(output_result)) => {
             if output_result.status.success() {
@@ -113,7 +109,10 @@ pub async fn convert_audio(
                 tracing::error!("[FFmpeg] stderr: {}", stderr);
                 Err(FfmpegError {
                     error_type,
-                    message: format!("FFmpeg conversion failed with exit code: {:?}", output_result.status.code()),
+                    message: format!(
+                        "FFmpeg conversion failed with exit code: {:?}",
+                        output_result.status.code()
+                    ),
                     stderr,
                 })
             }
@@ -127,19 +126,25 @@ pub async fn convert_audio(
             })
         }
         Err(_) => {
-            tracing::error!("[FFmpeg] Operation timed out after {} seconds", Config::FFMPEG_TIMEOUT_SEC);
+            tracing::error!(
+                "[FFmpeg] Operation timed out after {} seconds",
+                Config::FFMPEG_TIMEOUT_SEC
+            );
             Err(FfmpegError {
                 error_type: FfmpegErrorType::Timeout,
-                message: format!("FFmpeg operation timed out after {} seconds", Config::FFMPEG_TIMEOUT_SEC),
+                message: format!(
+                    "FFmpeg operation timed out after {} seconds",
+                    Config::FFMPEG_TIMEOUT_SEC
+                ),
                 stderr: String::new(),
             })
         }
     }
 }
 
-/// Get audio duration using ffprobe
-pub fn get_audio_duration(path: &Path) -> Option<String> {
-    let output = std::process::Command::new("ffprobe")
+/// Get audio duration using ffprobe (async version to avoid blocking tokio runtime)
+pub async fn get_audio_duration(path: &Path) -> Option<String> {
+    let output = tokio::process::Command::new("ffprobe")
         .arg("-v")
         .arg("error")
         .arg("-show_entries")
@@ -148,15 +153,16 @@ pub fn get_audio_duration(path: &Path) -> Option<String> {
         .arg("default=noprint_wrappers=1:nokey=1")
         .arg(path)
         .output()
+        .await
         .ok()?;
-    
+
     if output.status.success() {
         let duration_str = String::from_utf8_lossy(&output.stdout);
         let duration_secs: f64 = duration_str.trim().parse().ok()?;
-        
+
         let minutes = (duration_secs / 60.0).floor() as u32;
         let seconds = (duration_secs % 60.0).round() as u32;
-        
+
         Some(format!("{}:{:02}", minutes, seconds))
     } else {
         None

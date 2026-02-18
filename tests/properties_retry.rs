@@ -2,8 +2,8 @@
 
 use proptest::prelude::*;
 use show_theme_cli::retry::retry_with_backoff;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 // Feature: rust-rewrite, Property 16: Retry with exponential backoff
 // For any operation that fails K times (K < 3) then succeeds, the retry mechanism
@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(20))]
-    
+
     #[test]
     fn prop_retry_succeeds_after_k_failures(
         k in 0u32..3u32
@@ -20,7 +20,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
-        
+
         let result = rt.block_on(retry_with_backoff(3, 2.0, move || {
             let c = counter_clone.clone();
             async move {
@@ -32,7 +32,7 @@ proptest! {
                 }
             }
         }));
-        
+
         prop_assert_eq!(result, Ok(42));
         prop_assert_eq!(counter.load(Ordering::SeqCst), k + 1);
     }
@@ -44,7 +44,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
-        
+
         let result = rt.block_on(retry_with_backoff(max_attempts, 2.0, move || {
             let c = counter_clone.clone();
             async move {
@@ -52,7 +52,7 @@ proptest! {
                 Err::<i32, String>("Always fails".to_string())
             }
         }));
-        
+
         prop_assert!(result.is_err());
         prop_assert_eq!(counter.load(Ordering::SeqCst), max_attempts);
     }
@@ -64,7 +64,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
-        
+
         let result = rt.block_on(retry_with_backoff(3, 2.0, move || {
             let c = counter_clone.clone();
             async move {
@@ -72,7 +72,7 @@ proptest! {
                 Ok::<i32, String>(42)
             }
         }));
-        
+
         prop_assert_eq!(result, Ok(42));
         prop_assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
@@ -83,7 +83,7 @@ proptest! {
 async fn test_retry_exactly_three_attempts_on_all_failures() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
-    
+
     let result = retry_with_backoff(3, 2.0, move || {
         let c = counter_clone.clone();
         async move {
@@ -92,7 +92,7 @@ async fn test_retry_exactly_three_attempts_on_all_failures() {
         }
     })
     .await;
-    
+
     assert!(result.is_err());
     assert_eq!(counter.load(Ordering::SeqCst), 3);
 }
@@ -102,7 +102,7 @@ async fn test_retry_exactly_three_attempts_on_all_failures() {
 async fn test_retry_k_equals_zero() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
-    
+
     let result = retry_with_backoff(3, 2.0, move || {
         let c = counter_clone.clone();
         async move {
@@ -111,7 +111,7 @@ async fn test_retry_k_equals_zero() {
         }
     })
     .await;
-    
+
     assert_eq!(result, Ok(42));
     assert_eq!(counter.load(Ordering::SeqCst), 1); // K=0, so K+1=1
 }
@@ -121,7 +121,7 @@ async fn test_retry_k_equals_zero() {
 async fn test_retry_k_equals_one() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
-    
+
     let result = retry_with_backoff(3, 2.0, move || {
         let c = counter_clone.clone();
         async move {
@@ -134,7 +134,7 @@ async fn test_retry_k_equals_one() {
         }
     })
     .await;
-    
+
     assert_eq!(result, Ok(42));
     assert_eq!(counter.load(Ordering::SeqCst), 2); // K=1, so K+1=2
 }
@@ -144,7 +144,7 @@ async fn test_retry_k_equals_one() {
 async fn test_retry_k_equals_two() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
-    
+
     let result = retry_with_backoff(3, 2.0, move || {
         let c = counter_clone.clone();
         async move {
@@ -157,7 +157,7 @@ async fn test_retry_k_equals_two() {
         }
     })
     .await;
-    
+
     assert_eq!(result, Ok(42));
     assert_eq!(counter.load(Ordering::SeqCst), 3); // K=2, so K+1=3
 }

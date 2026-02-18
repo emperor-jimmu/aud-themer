@@ -32,7 +32,7 @@ proptest! {
             // Validation should fail
             let result = validate_input_path(&path);
             prop_assert!(result.is_err(), "Expected error for non-existent path: {:?}", path);
-            
+
             // Error message should mention the path doesn't exist
             let err_msg = result.unwrap_err();
             prop_assert!(
@@ -57,7 +57,7 @@ proptest! {
         // Create a temporary file
         let temp_dir = std::env::temp_dir();
         let file_path = temp_dir.join(filename);
-        
+
         // Write some content to ensure it's a file
         if let Ok(mut file) = fs::File::create(&file_path) {
             let _ = file.write_all(b"test content");
@@ -65,12 +65,12 @@ proptest! {
 
             // Validation should fail because it's a file, not a directory
             let result = validate_input_path(&file_path);
-            
+
             // Clean up
             let _ = fs::remove_file(&file_path);
 
             prop_assert!(result.is_err(), "Expected error for file path: {:?}", file_path);
-            
+
             // Error message should mention it's not a directory
             let err_msg = result.unwrap_err();
             prop_assert!(
@@ -89,7 +89,7 @@ proptest! {
     fn property_valid_directory_acceptance(_dummy in 0..100u32) {
         // Use the system temp directory which should always exist
         let temp_dir = std::env::temp_dir();
-        
+
         // Validation should succeed
         let result = validate_input_path(&temp_dir);
         prop_assert!(result.is_ok(), "Expected success for valid directory: {:?}", temp_dir);

@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use anyhow::{Context, Result};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use futures::StreamExt;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Shared browser instance for all chromiumoxide-based scrapers.
