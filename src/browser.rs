@@ -11,6 +11,21 @@ pub struct SharedBrowser {
     browser: Arc<Mutex<Option<Browser>>>,
 }
 
+impl Drop for SharedBrowser {
+    fn drop(&mut self) {
+        // Attempt to close the browser gracefully when the last reference is dropped
+        if Arc::strong_count(&self.browser) == 1 {
+            let browser = Arc::clone(&self.browser);
+            tokio::spawn(async move {
+                let mut guard = browser.lock().await;
+                if let Some(mut browser) = guard.take() {
+                    let _ = browser.close().await;
+                }
+            });
+        }
+    }
+}
+
 impl SharedBrowser {
     /// Create a new shared browser (lazy — Chrome is not launched until first use)
     #[must_use]
@@ -48,6 +63,15 @@ impl SharedBrowser {
 
         drop(guard);
         Ok(Arc::clone(&self.browser))
+    }
+
+    /// Explicitly close the browser instance
+    pub async fn close(&self) -> Result<()> {
+        let mut guard = self.browser.lock().await;
+        if let Some(mut browser) = guard.take() {
+            browser.close().await.context("Failed to close browser")?;
+        }
+        Ok(())
     }
 }
 

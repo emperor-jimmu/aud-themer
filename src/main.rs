@@ -105,14 +105,14 @@ fn validate_dependencies() -> Result<(), String> {
 
 /// Initialize tracing/logging based on verbosity
 fn init_logging(verbose: bool) {
-    let log_level = if verbose { "debug" } else { "info" };
+    // In non-verbose mode, suppress all logs except errors
+    // In verbose mode, show debug level logs
+    let log_level = if verbose { "debug" } else { "error" };
 
-    // Filter out noisy chromiumoxide errors that don't affect functionality
-    // Set chromiumoxide modules to 'off' to completely suppress their logs
+    // Filter out noisy chromiumoxide logs completely
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(log_level)
-            .add_directive("chromiumoxide::conn=off".parse().unwrap())
-            .add_directive("chromiumoxide::handler=off".parse().unwrap())
+            .add_directive("chromiumoxide=off".parse().unwrap())
     });
 
     // Only create log files in verbose mode to avoid littering the directory
@@ -135,10 +135,10 @@ fn init_logging(verbose: bool) {
 
         println!("{} Logging to {}", "ℹ".blue(), log_file);
     } else {
-        // Non-verbose mode: log to stderr only
+        // Non-verbose mode: suppress all logs to console (only errors will show)
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(filter)
-            .with_writer(std::io::stderr)
+            .with_writer(std::io::sink) // Discard all logs in non-verbose mode
             .with_ansi(false)
             .finish();
 
@@ -148,14 +148,14 @@ fn init_logging(verbose: bool) {
 }
 
 /// Initialize scrapers based on content mode
-fn init_scrapers(mode: ContentMode) -> Vec<Box<dyn ThemeScraper>> {
+fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBrowser>) {
     let shared_browser = SharedBrowser::new();
 
-    match mode {
+    let scrapers: Vec<Box<dyn ThemeScraper>> = match mode {
         ContentMode::Tv => {
             // TV mode: TelevisionTunes + YouTube
             vec![
-                Box::new(TvTunesScraper::new(shared_browser)),
+                Box::new(TvTunesScraper::new(shared_browser.clone())),
                 Box::new(YouTubeScraper::new()),
             ]
         }
@@ -163,7 +163,7 @@ fn init_scrapers(mode: ContentMode) -> Vec<Box<dyn ThemeScraper>> {
             // Anime mode: AnimeThemes + Themes.moe + YouTube
             vec![
                 Box::new(AnimeThemesScraper::new()),
-                Box::new(ThemesMoeScraper::new(shared_browser)),
+                Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(YouTubeScraper::new()),
             ]
         }
@@ -172,11 +172,15 @@ fn init_scrapers(mode: ContentMode) -> Vec<Box<dyn ThemeScraper>> {
             vec![
                 Box::new(TvTunesScraper::new(shared_browser.clone())),
                 Box::new(AnimeThemesScraper::new()),
-                Box::new(ThemesMoeScraper::new(shared_browser)),
+                Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(YouTubeScraper::new()),
             ]
         }
-    }
+    };
+
+    // Return scrapers and browser instances for cleanup
+    let browsers = vec![shared_browser];
+    (scrapers, browsers)
 }
 
 #[tokio::main]
@@ -242,7 +246,7 @@ async fn main() {
 
     // Initialize scrapers based on content mode
     info!("Initializing scrapers for mode: {:?}", args.mode);
-    let scrapers = init_scrapers(args.mode);
+    let (scrapers, browsers) = init_scrapers(args.mode);
 
     // Create orchestrator
     let mut orchestrator = Orchestrator::new(config, scrapers);
@@ -261,6 +265,11 @@ async fn main() {
                 results.success, results.skipped, results.failed
             );
 
+            // Clean up browser instances
+            for browser in browsers {
+                let _ = browser.close().await;
+            }
+
             // Display elapsed time
             println!(
                 "\n{} Completed in {:.2}s",
@@ -276,6 +285,12 @@ async fn main() {
         Err(err) => {
             error!("Critical error: {}", err);
             eprintln!("\n{} {}", "Error:".red().bold(), err);
+            
+            // Clean up browser instances even on error
+            for browser in browsers {
+                let _ = browser.close().await;
+            }
+            
             process::exit(1);
         }
     }
