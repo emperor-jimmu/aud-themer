@@ -13,6 +13,10 @@ impl Config {
     /// Download timeout in seconds
     pub const DOWNLOAD_TIMEOUT_SEC: u64 = 60;
 
+    /// CDN download timeout in seconds (for streaming large video files)
+    /// 3 minutes is generous for a ~10MB webm; if it stalls, fall through to next source
+    pub const CDN_DOWNLOAD_TIMEOUT_SEC: u64 = 180;
+
     /// Audio bitrate for MP3 conversion
     pub const AUDIO_BITRATE: &str = "320k";
 

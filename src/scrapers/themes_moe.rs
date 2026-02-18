@@ -26,6 +26,7 @@ impl ThemesMoeScraper {
         let client = Client::builder()
             .danger_accept_invalid_certs(true)
             .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
+            .timeout(std::time::Duration::from_secs(Config::CDN_DOWNLOAD_TIMEOUT_SEC))
             .user_agent(USER_AGENT.as_str())
             .build()
             .expect("Failed to build HTTP client");
@@ -196,6 +197,8 @@ impl ThemesMoeScraper {
         let response = self
             .client
             .get(url)
+            .header("Referer", "https://animethemes.moe/")
+            .header("Origin", "https://animethemes.moe")
             .send()
             .await
             .context("Failed to download media file")?;

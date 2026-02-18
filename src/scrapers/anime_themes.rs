@@ -60,10 +60,11 @@ impl AnimeThemesScraper {
                 .user_agent(USER_AGENT.as_str())
                 .build()
                 .expect("Failed to build HTTP client"),
-            // Separate client for large file downloads — no overall timeout,
-            // only a connect timeout to avoid hanging on unreachable hosts.
+            // Separate client for large file downloads with a generous but bounded timeout.
+            // The CDN can stall connections; 3 minutes is enough for a ~10MB webm file.
             download_client: Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
+                .timeout(std::time::Duration::from_secs(Config::CDN_DOWNLOAD_TIMEOUT_SEC))
                 .user_agent(USER_AGENT.as_str())
                 .build()
                 .expect("Failed to build download HTTP client"),
@@ -175,6 +176,8 @@ impl AnimeThemesScraper {
         let response = self
             .download_client
             .get(url)
+            .header("Referer", "https://animethemes.moe/")
+            .header("Origin", "https://animethemes.moe")
             .send()
             .await
             .context("Failed to download video")?;

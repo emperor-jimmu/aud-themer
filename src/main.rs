@@ -19,7 +19,7 @@ use tracing_subscriber::EnvFilter;
 pub enum ContentMode {
     /// TV shows only (TelevisionTunes + YouTube)
     Tv,
-    /// Anime only (AnimeThemes + Themes.moe + YouTube)
+    /// Anime only (Themes.moe + AnimeThemes + YouTube)
     Anime,
     /// Both TV and anime (all sources)
     #[default]
@@ -181,10 +181,10 @@ fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBr
             ]
         }
         ContentMode::Anime => {
-            // Anime mode: AnimeThemes + Themes.moe + YouTube
+            // Anime mode: Themes.moe + AnimeThemes + YouTube
             vec![
-                Box::new(AnimeThemesScraper::new()),
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
+                Box::new(AnimeThemesScraper::new()),
                 Box::new(YouTubeScraper::new()),
             ]
         }
@@ -192,8 +192,8 @@ fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBr
             // Both mode: All sources
             vec![
                 Box::new(TvTunesScraper::new(shared_browser.clone())),
-                Box::new(AnimeThemesScraper::new()),
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
+                Box::new(AnimeThemesScraper::new()),
                 Box::new(YouTubeScraper::new()),
             ]
         }
