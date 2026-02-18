@@ -26,7 +26,6 @@ impl TvTunesScraper {
         if self.browser.is_none() {
             let (browser, mut handler) = Browser::launch(
                 BrowserConfig::builder()
-                    .with_head()
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build browser config: {}", e))?
             )
@@ -59,7 +58,7 @@ impl TvTunesScraper {
             }
         ).await?;
 
-        // Navigate to search page
+        // Navigate to home page
         page.goto(BASE_URL)
             .await
             .context("Failed to navigate to TelevisionTunes")?
@@ -67,8 +66,11 @@ impl TvTunesScraper {
             .await
             .context("Failed to wait for navigation")?;
 
-        // Find search input and submit
-        let search_input = page.find_element("input[name='search']")
+        // Wait for page to load
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        // Find search input by role and type the show name
+        let search_input = page.find_element("input[role='searchbox']")
             .await
             .context("Failed to find search input")?;
 
@@ -84,11 +86,11 @@ impl TvTunesScraper {
             .await
             .context("Failed to submit search")?;
 
-        // Wait for results
+        // Wait for search results to load
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-        // Find best matching result
-        let results = page.find_elements("div.search-result a")
+        // Find search result links - they're in the main content area
+        let results = page.find_elements("a[href*='.html']")
             .await
             .unwrap_or_default();
 
@@ -106,7 +108,7 @@ impl TvTunesScraper {
             let full_url = if href.starts_with("http") {
                 href
             } else {
-                format!("{}{}", BASE_URL, href)
+                format!("{}/{}", BASE_URL, href.trim_start_matches('/'))
             };
             Ok(Some(full_url))
         } else {
@@ -124,8 +126,11 @@ impl TvTunesScraper {
             .await
             .context("Failed to wait for page load")?;
 
-        // Find download link
-        let download_link = page.find_element("a[href*='.wav'], a[href*='.mp3']")
+        // Wait for page to fully load
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        // Find download link - it's in the format /song/download/{id}
+        let download_link = page.find_element("a[href*='/song/download/']")
             .await;
 
         if download_link.is_err() {
@@ -156,12 +161,22 @@ impl TvTunesScraper {
                 return Ok(false);
             }
 
+            // Get content type before consuming response
+            let content_type = response.headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+
             let bytes = response.bytes()
                 .await
                 .context("Failed to read audio bytes")?;
 
-            // Determine if we need to convert
-            let needs_conversion = full_url.ends_with(".wav");
+            // Determine if we need to convert based on content type or file signature
+            let needs_conversion = content_type.contains("wav") || 
+                                   content_type.contains("x-wav") ||
+                                   // Check WAV file signature (RIFF header)
+                                   (bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
 
             if needs_conversion {
                 // Save to temporary WAV file
