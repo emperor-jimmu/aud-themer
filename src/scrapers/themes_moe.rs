@@ -26,7 +26,8 @@ impl ThemesMoeScraper {
         if self.browser.is_none() {
             let (browser, mut handler) = Browser::launch(
                 BrowserConfig::builder()
-                    .with_head()
+                    .arg("--ignore-certificate-errors")
+                    .arg("--ignore-ssl-errors")
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build browser config: {}", e))?
             )
@@ -67,20 +68,35 @@ impl ThemesMoeScraper {
             .await
             .context("Failed to wait for navigation")?;
 
-        // Select "Anime Search" mode
-        let anime_search_button = page.find_element("button[data-mode='anime'], a[href*='anime']")
+        // Wait for page to load
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        // Click the mode selector button (MyAnimeList/AniList/Anime Search dropdown)
+        let mode_button = page.find_element("button:has-text('MyAnimeList'), button:has-text('AniList'), button:has-text('Anime Search')")
             .await;
 
-        if let Ok(button) = anime_search_button {
+        if let Ok(button) = mode_button {
             button.click()
                 .await
-                .context("Failed to click anime search mode")?;
+                .context("Failed to click mode selector")?;
             
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+            // Click "Anime Search" option from the dropdown
+            let anime_search_option = page.find_element("*:has-text('Anime Search')")
+                .await;
+            
+            if let Ok(option) = anime_search_option {
+                option.click()
+                    .await
+                    .context("Failed to select Anime Search mode")?;
+                
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            }
         }
 
         // Find search input
-        let search_input = page.find_element("input[type='search'], input[placeholder*='Search']")
+        let search_input = page.find_element("input[type='search'], input[placeholder*='search'], input[role='combobox']")
             .await
             .context("Failed to find search input")?;
 
@@ -97,14 +113,15 @@ impl ThemesMoeScraper {
             .context("Failed to submit search")?;
 
         // Wait for results
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
-        // Find OP theme links in results table
-        let op_links = page.find_elements("a[href*='OP'], tr:has-text('OP') a, td:has-text('OP') + td a")
+        // Find OP theme links - they're direct .webm links in the table
+        let op_links = page.find_elements("a[href*='.webm'][href*='OP']")
             .await
             .unwrap_or_default();
 
         if op_links.is_empty() {
+            tracing::debug!("No OP themes found for: {}", show_name);
             return Ok(None);
         }
 
@@ -115,92 +132,52 @@ impl ThemesMoeScraper {
             .context("Failed to get OP link href")?;
 
         if let Some(href) = href {
-            let full_url = if href.starts_with("http") {
-                href
-            } else {
-                format!("{}{}", BASE_URL, href)
-            };
-            Ok(Some(full_url))
+            tracing::debug!("Found theme URL: {}", href);
+            Ok(Some(href))
         } else {
             Ok(None)
         }
     }
 
     async fn download_media(&mut self, url: &str, output_path: &Path) -> Result<bool> {
-        let browser = self.ensure_browser().await?;
-        let page = browser.new_page(url)
+        // The URL is a direct link to the .webm file, no need for browser
+        tracing::debug!("Downloading media from: {}", url);
+
+        // Download the media file
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
+            .build()
+            .context("Failed to build HTTP client")?;
+            
+        let response = client.get(url)
+            .send()
             .await
-            .context("Failed to create page for media")?;
+            .context("Failed to download media file")?;
 
-        page.wait_for_navigation()
-            .await
-            .context("Failed to wait for page load")?;
-
-        // Find media source (video or audio)
-        let media_element = page.find_element("video source, audio source, video, audio")
-            .await;
-
-        if media_element.is_err() {
+        if !response.status().is_success() {
             return Ok(false);
         }
 
-        let element = media_element.unwrap();
-        let src = element.attribute("src")
+        let bytes = response.bytes()
             .await
-            .context("Failed to get media src")?;
+            .context("Failed to read media bytes")?;
 
-        if let Some(media_url) = src {
-            let full_url = if media_url.starts_with("http") {
-                media_url
-            } else {
-                format!("{}{}", BASE_URL, media_url)
-            };
+        // Save to temporary video file
+        let temp_video = output_path.with_extension("temp.webm");
+        let mut file = fs::File::create(&temp_video).await
+            .context("Failed to create temp video file")?;
+        file.write_all(&bytes).await
+            .context("Failed to write temp video file")?;
 
-            // Download the media file
-            let client = reqwest::Client::new();
-            let response = client.get(&full_url)
-                .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
-                .send()
-                .await
-                .context("Failed to download media file")?;
+        // Convert to MP3
+        convert_audio(&temp_video, output_path, Config::AUDIO_BITRATE).await
+            .context("Failed to convert video to MP3")?;
 
-            if !response.status().is_success() {
-                return Ok(false);
-            }
+        // Clean up temp file
+        let _ = fs::remove_file(&temp_video).await;
 
-            let bytes = response.bytes()
-                .await
-                .context("Failed to read media bytes")?;
-
-            // Determine if it's a video format that needs conversion
-            let is_video = full_url.ends_with(".mp4") || full_url.ends_with(".webm");
-
-            if is_video {
-                // Save to temporary video file
-                let temp_video = output_path.with_extension("temp.mp4");
-                let mut file = fs::File::create(&temp_video).await
-                    .context("Failed to create temp video file")?;
-                file.write_all(&bytes).await
-                    .context("Failed to write temp video file")?;
-
-                // Convert to MP3
-                convert_audio(&temp_video, output_path, Config::AUDIO_BITRATE).await
-                    .context("Failed to convert video to MP3")?;
-
-                // Clean up temp file
-                let _ = fs::remove_file(&temp_video).await;
-            } else {
-                // Save directly as MP3 or convert if needed
-                let mut file = fs::File::create(output_path).await
-                    .context("Failed to create output file")?;
-                file.write_all(&bytes).await
-                    .context("Failed to write output file")?;
-            }
-
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(true)
     }
 }
 
