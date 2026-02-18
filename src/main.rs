@@ -21,6 +21,8 @@ pub enum ContentMode {
     Tv,
     /// Anime only (Themes.moe + AnimeThemes + YouTube)
     Anime,
+    /// YouTube only (no other sources)
+    Youtube,
     /// Both TV and anime (all sources)
     #[default]
     Both,
@@ -39,7 +41,7 @@ pub struct CliArgs {
     #[arg(value_name = "INPUT_DIR")]
     pub input_dir: Option<PathBuf>,
 
-    /// Content type - tv, anime, or both
+    /// Content type - tv, anime, youtube, or both
     #[arg(short, long, value_enum, default_value_t = ContentMode::Both)]
     pub mode: ContentMode,
 
@@ -185,6 +187,12 @@ fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBr
             vec![
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(AnimeThemesScraper::new()),
+                Box::new(YouTubeScraper::new()),
+            ]
+        }
+        ContentMode::Youtube => {
+            // YouTube-only mode: No other sources
+            vec![
                 Box::new(YouTubeScraper::new()),
             ]
         }
