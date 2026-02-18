@@ -44,7 +44,7 @@ impl Config {
 /// User-Agent header for HTTP requests (dynamically includes version from Cargo.toml)
 pub static USER_AGENT: LazyLock<String> = LazyLock::new(|| {
     format!(
-        "show-theme-cli/{} (https://github.com/show-theme-cli/show-theme-cli)",
+        "audio-theme-downloader/{} (https://github.com/audio-theme-downloader/audio-theme-downloader)",
         env!("CARGO_PKG_VERSION")
     )
 });

@@ -47,10 +47,17 @@ impl SharedBrowser {
             // Try to find/download Chromium
             let chrome_path = Self::ensure_chromium().await?;
             
-            // Create a temporary user data dir so we don't collide with
-            // an already-running Chrome session (exit status 21 on Windows).
+            // Create a unique temporary user data dir per process to avoid
+            // collisions with any running Chrome instance (exit status 21 on Windows).
             let temp_user_data = std::env::temp_dir()
-                .join("show-theme-cli-chrome-profile");
+                .join(format!(
+                    "audio-theme-downloader-chrome-{}-{}",
+                    std::process::id(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                ));
             if !temp_user_data.exists() {
                 std::fs::create_dir_all(&temp_user_data)
                     .map_err(|e| anyhow::anyhow!("Failed to create temp Chrome profile dir: {e}"))?;
@@ -103,26 +110,35 @@ impl SharedBrowser {
     
     /// Ensure Chromium is available, downloading if necessary
     async fn ensure_chromium() -> Result<Option<PathBuf>> {
-        // Strategy: Try system Chrome first, then download as fallback
-        // This avoids the Windows exit status 21 issue with downloaded Chromium
+        // Strategy: Try system Chrome first, then local .chromium, then download
         
-        // First, check if system Chrome/Chromium exists
+        // 1. Check if system Chrome/Chromium exists
         if let Some(system_chrome) = Self::find_system_chrome() {
             tracing::info!("Found system Chrome at: {}", system_chrome.display());
             return Ok(Some(system_chrome));
         }
         
-        tracing::info!("No system Chrome found, attempting to download Chromium...");
+        // 2. Check for already-downloaded Chromium next to the executable
+        //    (handles running from target/release or installed location)
+        let exe_chromium = Self::find_local_chromium();
+        if let Some(local_chrome) = exe_chromium {
+            tracing::info!("Found local Chromium at: {}", local_chrome.display());
+            return Ok(Some(local_chrome));
+        }
         
-        // Check if we should download Chromium
-        let download_dir = std::env::current_dir()?.join(".chromium");
+        tracing::info!("No system or local Chrome found, attempting to download Chromium...");
+        
+        // 3. Download as fallback
+        let download_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join(".chromium")))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join(".chromium"));
         
         // Create download directory if it doesn't exist
         if !download_dir.exists() {
             tokio::fs::create_dir_all(&download_dir).await?;
         }
         
-        // Check if we already have a downloaded version
         let fetcher = BrowserFetcher::new(
             BrowserFetcherOptions::builder()
                 .with_path(&download_dir)
@@ -130,18 +146,75 @@ impl SharedBrowser {
                 .map_err(|e| anyhow::anyhow!("Failed to create browser fetcher: {e}"))?,
         );
         
-        // Try to fetch (will download if not present)
         match fetcher.fetch().await {
             Ok(info) => {
-                tracing::info!("Chromium downloaded to: {}", info.executable_path.display());
+                tracing::info!("Chromium available at: {}", info.executable_path.display());
                 Ok(Some(info.executable_path))
             }
             Err(e) => {
                 tracing::warn!("Failed to fetch Chromium: {}. Browser automation will be unavailable.", e);
-                // Return None to let chromiumoxide try its default behavior
                 Ok(None)
             }
         }
+    }
+    
+    /// Look for a previously-downloaded Chromium in .chromium directories
+    /// relative to the executable or the current working directory.
+    fn find_local_chromium() -> Option<PathBuf> {
+        let candidate_dirs: Vec<PathBuf> = [
+            // Next to the executable (e.g. target/release/.chromium)
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join(".chromium"))),
+            // Current working directory
+            std::env::current_dir().ok().map(|d| d.join(".chromium")),
+            // Project root (two levels up from target/release)
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent()?.parent()?.parent().map(|d| d.join(".chromium"))),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        
+        for dir in candidate_dirs {
+            if !dir.exists() {
+                continue;
+            }
+            // Walk one level: .chromium/<revision>/<platform>/chrome.exe
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let revision_dir = entry.path();
+                    if !revision_dir.is_dir() {
+                        continue;
+                    }
+                    // Look inside revision dir for chrome-win/chrome.exe (Windows)
+                    let chrome_exe = revision_dir.join("chrome-win").join("chrome.exe");
+                    if chrome_exe.exists() {
+                        return Some(chrome_exe);
+                    }
+                    // Also check chrome-linux/chrome (Linux)
+                    let chrome_linux = revision_dir.join("chrome-linux").join("chrome");
+                    if chrome_linux.exists() {
+                        return Some(chrome_linux);
+                    }
+                    // Check if the fetcher put it directly in the revision dir
+                    if let Ok(sub_entries) = std::fs::read_dir(&revision_dir) {
+                        for sub in sub_entries.flatten() {
+                            let sub_path = sub.path();
+                            if sub_path.is_dir() {
+                                let exe = sub_path.join("chrome.exe");
+                                if exe.exists() {
+                                    return Some(exe);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
     }
     
     /// Try to find system-installed Chrome/Chromium
@@ -169,12 +242,10 @@ impl SharedBrowser {
                 .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
         ];
         
-        for path_opt in possible_paths {
-            if let Some(path) = path_opt {
-                if path.exists() {
-                    tracing::debug!("Found Chrome at: {}", path.display());
-                    return Some(path);
-                }
+        for path in possible_paths.into_iter().flatten() {
+            if path.exists() {
+                tracing::debug!("Found Chrome at: {}", path.display());
+                return Some(path);
             }
         }
         

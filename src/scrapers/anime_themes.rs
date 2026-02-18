@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -46,6 +47,7 @@ pub struct Video {
 
 pub struct AnimeThemesScraper {
     client: Client,
+    download_client: Client,
 }
 
 impl AnimeThemesScraper {
@@ -58,6 +60,13 @@ impl AnimeThemesScraper {
                 .user_agent(USER_AGENT.as_str())
                 .build()
                 .expect("Failed to build HTTP client"),
+            // Separate client for large file downloads — no overall timeout,
+            // only a connect timeout to avoid hanging on unreachable hosts.
+            download_client: Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
+                .user_agent(USER_AGENT.as_str())
+                .build()
+                .expect("Failed to build download HTTP client"),
         }
     }
 
@@ -164,9 +173,8 @@ impl AnimeThemesScraper {
         tracing::info!("[AnimeThemes] Downloading video from: {}", url);
 
         let response = self
-            .client
+            .download_client
             .get(url)
-            .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
             .send()
             .await
             .context("Failed to download video")?;
@@ -179,21 +187,23 @@ impl AnimeThemesScraper {
             anyhow::bail!("Failed to download video: HTTP {}", status);
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .context("Failed to read video bytes")?;
-
-        tracing::info!("[AnimeThemes] Downloaded {} bytes", bytes.len());
-
+        // Stream the response body to disk in chunks to avoid timeout on large files
         let mut file = fs::File::create(output_path)
             .await
             .context("Failed to create output file")?;
 
-        file.write_all(&bytes)
-            .await
-            .context("Failed to write video file")?;
+        let mut stream = response.bytes_stream();
+        let mut total_bytes: u64 = 0;
 
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("Failed to read video chunk")?;
+            total_bytes += chunk.len() as u64;
+            file.write_all(&chunk)
+                .await
+                .context("Failed to write video chunk")?;
+        }
+
+        tracing::info!("[AnimeThemes] Downloaded {} bytes", total_bytes);
         tracing::info!("[AnimeThemes] Video saved to: {}", output_path.display());
         Ok(())
     }

@@ -1,8 +1,8 @@
 [package]
-name = "show-theme-cli"
+name = "audio-theme-downloader"
 version = "0.6.5"
 edition = "2024"
-authors = ["Show Theme CLI Contributors"]
+authors = ["Audio Theme Downloader Contributors"]
 description = "Automate theme song downloads for TV shows and anime"
 license = "MIT"
 
@@ -33,9 +33,9 @@ proptest = "1.5"
 tempfile = "3.8"
 
 [lib]
-name = "show_theme_cli"
+name = "audio_theme_downloader"
 path = "src/lib.rs"
 
 [[bin]]
-name = "show-theme-cli"
+name = "audio-theme-downloader"
 path = "src/main.rs"

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::Client;
 use std::path::Path;
 use tokio::fs;
@@ -24,7 +25,7 @@ impl ThemesMoeScraper {
     pub fn new(browser: SharedBrowser) -> Self {
         let client = Client::builder()
             .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
+            .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
             .user_agent(USER_AGENT.as_str())
             .build()
             .expect("Failed to build HTTP client");
@@ -61,41 +62,55 @@ impl ThemesMoeScraper {
             .context("Failed to wait for navigation")?;
 
         // Wait for page to load
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-        // Click the mode selector button to open dropdown
-        let mode_button = page.find_element("button:has-text('MyAnimeList'), button:has-text('AniList'), button:has-text('Anime Search')")
+        // Click the mode selector button using JS (chromiumoxide doesn't support :has-text)
+        let _ = page
+            .evaluate_expression(
+                r#"
+                (function() {
+                    const buttons = document.querySelectorAll('button');
+                    for (const btn of buttons) {
+                        const text = btn.textContent.trim();
+                        if (text === 'MyAnimeList' || text === 'AniList' || text === 'Anime Search') {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                })()
+                "#,
+            )
             .await;
 
-        if let Ok(button) = mode_button {
-            tracing::info!("[Themes.moe] Clicking mode selector");
-            button
-                .click()
-                .await
-                .context("Failed to click mode selector")?;
+        tracing::info!("[Themes.moe] Clicked mode selector");
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // Click "Anime Search" option from the dropdown
+        let _ = page
+            .evaluate_expression(
+                r#"
+                (function() {
+                    const items = document.querySelectorAll('li, li > div, li > span');
+                    for (const item of items) {
+                        if (item.textContent.trim() === 'Anime Search') {
+                            item.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                })()
+                "#,
+            )
+            .await;
 
-            // Click "Anime Search" option from the dropdown
-            let anime_search_option = page.find_element("*:has-text('Anime Search')").await;
+        tracing::info!("[Themes.moe] Selected Anime Search mode");
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-            if let Ok(option) = anime_search_option {
-                tracing::info!("[Themes.moe] Selecting Anime Search mode");
-                option
-                    .click()
-                    .await
-                    .context("Failed to select Anime Search mode")?;
-
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            }
-        }
-
-        // Find search input (combobox)
+        // Find and interact with the search input
         tracing::info!("[Themes.moe] Entering search query: {}", show_name);
         let search_input = page
-            .find_element(
-                "input[type='search'], input[role='combobox'], input[placeholder*='search']",
-            )
+            .find_element("input[role='combobox'], input[type='search'], input[placeholder]")
             .await
             .context("Failed to find search input")?;
 
@@ -104,7 +119,6 @@ impl ThemesMoeScraper {
             .await
             .context("Failed to click search input")?;
 
-        // Clear any existing text and type the show name
         search_input
             .type_str(show_name)
             .await
@@ -119,17 +133,27 @@ impl ThemesMoeScraper {
         tracing::info!("[Themes.moe] Waiting for search results");
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
-        // Check if we got "No anime found" message
-        let no_results = page.find_element("p:has-text('No anime found')").await;
+        // Check for "No anime found" or "No results" using JS
+        let no_results: bool = page
+            .evaluate_expression(
+                r#"
+                (function() {
+                    const body = document.body.innerText;
+                    return body.includes('No anime found') || body.includes('No results available');
+                })()
+                "#,
+            )
+            .await
+            .ok()
+            .and_then(|v| v.value().map(|val| val.as_bool().unwrap_or(false)))
+            .unwrap_or(false);
 
-        if no_results.is_ok() {
+        if no_results {
             tracing::info!("[Themes.moe] No anime found for: {}", show_name);
             return Ok(None);
         }
 
-        // Look for OP theme links in the table
-        // The structure is: table > tbody > tr > td > a[href*='.webm']
-        // We want links that contain 'OP' in the text or href
+        // Look for OP theme links in the results table
         let op_links = page
             .find_elements("table a[href*='.webm']")
             .await
@@ -153,10 +177,10 @@ impl ThemesMoeScraper {
             }
         }
 
-        // If no OP found, try getting href from first link and check if it contains OP
+        // If no OP found by text, check href for OP pattern
         if let Some(first_link) = op_links.first()
             && let Ok(Some(href)) = first_link.attribute("href").await
-            && href.to_uppercase().contains("OP")
+            && href.to_uppercase().contains("-OP")
         {
             tracing::info!("[Themes.moe] Found OP theme URL: {}", href);
             return Ok(Some(href));
@@ -184,21 +208,24 @@ impl ThemesMoeScraper {
             return Ok(false);
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .context("Failed to read media bytes")?;
-
-        tracing::info!("[Themes.moe] Downloaded {} bytes", bytes.len());
-
-        // Save to temporary video file
+        // Stream to temporary video file to avoid timeout on large .webm files
         let temp_video = output_path.with_extension("temp.webm");
         let mut file = fs::File::create(&temp_video)
             .await
             .context("Failed to create temp video file")?;
-        file.write_all(&bytes)
-            .await
-            .context("Failed to write temp video file")?;
+
+        let mut stream = response.bytes_stream();
+        let mut total_bytes: u64 = 0;
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("Failed to read media chunk")?;
+            total_bytes += chunk.len() as u64;
+            file.write_all(&chunk)
+                .await
+                .context("Failed to write media chunk")?;
+        }
+
+        tracing::info!("[Themes.moe] Downloaded {} bytes", total_bytes);
 
         // Convert to MP3
         tracing::info!("[Themes.moe] Converting to MP3");

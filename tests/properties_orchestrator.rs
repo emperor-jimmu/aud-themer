@@ -3,8 +3,8 @@
 
 use async_trait::async_trait;
 use proptest::prelude::*;
-use show_theme_cli::orchestrator::{Orchestrator, OrchestratorConfig};
-use show_theme_cli::scrapers::ThemeScraper;
+use audio_theme_downloader::orchestrator::{Orchestrator, OrchestratorConfig};
+use audio_theme_downloader::scrapers::ThemeScraper;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};

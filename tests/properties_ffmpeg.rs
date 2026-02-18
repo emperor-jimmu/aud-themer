@@ -1,8 +1,8 @@
 // Feature: rust-rewrite, Property tests for FFmpeg module
 
 use proptest::prelude::*;
-use show_theme_cli::config::Config;
-use show_theme_cli::ffmpeg::*;
+use audio_theme_downloader::config::Config;
+use audio_theme_downloader::ffmpeg::*;
 use std::path::PathBuf;
 
 // Feature: rust-rewrite, Property 12: FFmpeg command construction

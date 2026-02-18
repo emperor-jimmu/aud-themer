@@ -1,6 +1,6 @@
 // Feature: rust-rewrite, Property tests for rate limiter module
 
-use show_theme_cli::rate_limiter::RateLimiter;
+use audio_theme_downloader::rate_limiter::RateLimiter;
 use std::time::Instant;
 
 // Feature: rust-rewrite, Property 15: Rate limiter delay bounds

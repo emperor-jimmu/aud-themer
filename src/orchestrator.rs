@@ -6,6 +6,8 @@ use anyhow::Result;
 use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Configuration for the orchestrator
 #[derive(Debug, Clone)]
@@ -69,12 +71,24 @@ pub struct Orchestrator {
     config: OrchestratorConfig,
     /// Accumulated results
     results: ProcessingResults,
+    /// Cancellation flag (set by Ctrl+C handler)
+    cancel_flag: Arc<AtomicBool>,
 }
 
 impl Orchestrator {
     /// Create a new orchestrator with the given configuration and scrapers
     #[must_use]
     pub fn new(config: OrchestratorConfig, scrapers: Vec<Box<dyn ThemeScraper>>) -> Self {
+        Self::with_cancel_flag(config, scrapers, Arc::new(AtomicBool::new(false)))
+    }
+
+    /// Create a new orchestrator with a cancellation flag for graceful shutdown
+    #[must_use]
+    pub fn with_cancel_flag(
+        config: OrchestratorConfig,
+        scrapers: Vec<Box<dyn ThemeScraper>>,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Self {
         let rate_limiter = RateLimiter::new();
 
         Self {
@@ -82,6 +96,7 @@ impl Orchestrator {
             rate_limiter,
             config,
             results: ProcessingResults::default(),
+            cancel_flag,
         }
     }
 
@@ -118,6 +133,18 @@ impl Orchestrator {
         // Process each show folder
         let total = show_folders.len();
         for (index, show_folder) in show_folders.iter().enumerate() {
+            // Check for cancellation before each show
+            if self.cancel_flag.load(Ordering::SeqCst) {
+                tracing::info!("Cancellation requested, stopping after {} shows", index);
+                println!(
+                    "\n{} Stopped by user after processing {}/{} shows",
+                    "⚠".yellow(),
+                    index,
+                    total
+                );
+                break;
+            }
+
             let folder_num = index + 1;
             self.process_show(show_folder, folder_num, total).await;
         }

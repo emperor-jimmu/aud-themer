@@ -1,13 +1,13 @@
 use clap::Parser;
 use colored::Colorize;
-use show_theme_cli::browser::SharedBrowser;
-use show_theme_cli::orchestrator::{Orchestrator, OrchestratorConfig};
-use show_theme_cli::scrapers::ThemeScraper;
-use show_theme_cli::scrapers::anime_themes::AnimeThemesScraper;
-use show_theme_cli::scrapers::themes_moe::ThemesMoeScraper;
-use show_theme_cli::scrapers::tv_tunes::TvTunesScraper;
-use show_theme_cli::scrapers::youtube::YouTubeScraper;
-use show_theme_cli::validate_input_path;
+use audio_theme_downloader::browser::SharedBrowser;
+use audio_theme_downloader::orchestrator::{Orchestrator, OrchestratorConfig};
+use audio_theme_downloader::scrapers::ThemeScraper;
+use audio_theme_downloader::scrapers::anime_themes::AnimeThemesScraper;
+use audio_theme_downloader::scrapers::themes_moe::ThemesMoeScraper;
+use audio_theme_downloader::scrapers::tv_tunes::TvTunesScraper;
+use audio_theme_downloader::scrapers::youtube::YouTubeScraper;
+use audio_theme_downloader::validate_input_path;
 use std::path::PathBuf;
 use std::process::{self, Command};
 use std::time::Instant;
@@ -26,10 +26,10 @@ pub enum ContentMode {
     Both,
 }
 
-/// Show Theme CLI - Automate theme song downloads for TV shows and anime
+/// Audio Theme Downloader - Automate theme song downloads for TV shows and anime
 #[derive(Parser, Debug)]
 #[command(
-    name = "show-theme-cli",
+    name = "audio-theme-downloader",
     version = env!("CARGO_PKG_VERSION"),
     about = "Automate theme song downloads for TV shows and anime",
     long_about = "Scans local directory structures, identifies shows by folder name, and downloads high-quality theme songs from multiple prioritized sources."
@@ -109,11 +109,11 @@ fn validate_dependencies() -> Result<(), String> {
     Ok(())
 }
 
-/// Initialize tracing/logging based on verbosity
+/// Initialize tracing/logging based on verbosity.
+/// Logs are ALWAYS written to a file. Verbose mode increases the log level to debug.
 fn init_logging(verbose: bool, log_dir: Option<PathBuf>) {
-    // In non-verbose mode, suppress all logs except errors
-    // In verbose mode, show debug level logs
-    let log_level = if verbose { "debug" } else { "error" };
+    // Verbose = debug, otherwise info-level logs to file (so we always capture useful info)
+    let log_level = if verbose { "debug" } else { "info" };
 
     // Filter out noisy chromiumoxide logs completely
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -121,59 +121,51 @@ fn init_logging(verbose: bool, log_dir: Option<PathBuf>) {
             .add_directive("chromiumoxide=off".parse().unwrap())
     });
 
-    // Only create log files in verbose mode to avoid littering the directory
-    if verbose {
-        // Determine log directory (default to current directory)
-        let log_directory = log_dir.unwrap_or_else(|| PathBuf::from("."));
-        
-        // Create log directory if it doesn't exist
-        if !log_directory.exists() {
-            if let Err(e) = std::fs::create_dir_all(&log_directory) {
-                eprintln!("Warning: Failed to create log directory: {}", e);
-                eprintln!("Logs will not be written to disk.");
-                
-                // Fall back to console-only logging
-                let subscriber = tracing_subscriber::fmt()
-                    .with_env_filter(filter)
-                    .with_writer(std::io::sink)
-                    .with_ansi(false)
-                    .finish();
-
-                tracing::subscriber::set_global_default(subscriber)
-                    .expect("Failed to set tracing subscriber");
-                return;
-            }
-        }
-
-        // Create log file with timestamp
-        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let log_filename = format!("show-theme-cli_{}.log", timestamp);
-        let log_path = log_directory.join(&log_filename);
-
-        // Set up file logging using rolling appender
-        let file_appender = tracing_appender::rolling::never(&log_directory, log_filename.clone());
-
-        let subscriber = tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .with_writer(file_appender)
-            .with_ansi(false)
-            .finish();
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("Failed to set tracing subscriber");
-
-        println!("{} Logging to {}", "ℹ".blue(), log_path.display());
+    // Determine log directory
+    let log_directory = if let Some(dir) = log_dir {
+        dir
     } else {
-        // Non-verbose mode: suppress all logs to console (only errors will show)
+        // Default: write logs to the current working directory (where the user ran the command)
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    };
+
+    // Create log directory if it doesn't exist
+    if !log_directory.exists()
+        && let Err(e) = std::fs::create_dir_all(&log_directory)
+    {
+        eprintln!("Warning: Failed to create log directory: {}", e);
+        eprintln!("Logs will not be written to disk.");
+
+        // Fall back to console-only logging (sink in non-verbose)
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(filter)
-            .with_writer(std::io::sink) // Discard all logs in non-verbose mode
+            .with_writer(std::io::sink)
             .with_ansi(false)
             .finish();
 
         tracing::subscriber::set_global_default(subscriber)
             .expect("Failed to set tracing subscriber");
+        return;
     }
+
+    // Create log file with timestamp
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let log_filename = format!("{}.log", timestamp);
+    let log_path = log_directory.join(&log_filename);
+
+    // Set up file logging using rolling appender
+    let file_appender = tracing_appender::rolling::never(&log_directory, log_filename.clone());
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(file_appender)
+        .with_ansi(false)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to set tracing subscriber");
+
+    println!("{} Logging to {}", "ℹ".blue(), log_path.display());
 }
 
 /// Initialize scrapers based on content mode
@@ -222,7 +214,7 @@ async fn main() {
         None => {
             eprintln!("Error: INPUT_DIR is required");
             eprintln!();
-            eprintln!("Usage: show-theme-cli <INPUT_DIR> [OPTIONS]");
+            eprintln!("Usage: audio-theme-downloader <INPUT_DIR> [OPTIONS]");
             eprintln!();
             eprintln!("For more information, try '--help'");
             process::exit(1);
@@ -243,16 +235,23 @@ async fn main() {
 
     // Initialize logging
     init_logging(args.verbose, args.log_dir.clone());
-    info!("Show Theme CLI v{} starting", env!("CARGO_PKG_VERSION"));
+    info!("Audio Theme Downloader v{} starting", env!("CARGO_PKG_VERSION"));
     info!("Input directory: {}", input_dir.display());
 
-    // Set up Ctrl+C handler
+    // Set up Ctrl+C handler that flushes logs before exiting
+    let ctrlc_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let ctrlc_flag_clone = ctrlc_flag.clone();
     ctrlc::set_handler(move || {
+        // If already pressed once, force exit
+        if ctrlc_flag_clone.load(std::sync::atomic::Ordering::SeqCst) {
+            eprintln!("\nForce exiting...");
+            process::exit(130);
+        }
+        ctrlc_flag_clone.store(true, std::sync::atomic::Ordering::SeqCst);
         eprintln!(
-            "\n{} Interrupted by user. Exiting gracefully...",
+            "\n{} Interrupted by user. Finishing current operation and exiting...",
             "⚠".yellow()
         );
-        process::exit(130); // Standard exit code for SIGINT
     })
     .expect("Error setting Ctrl-C handler");
 
@@ -260,7 +259,7 @@ async fn main() {
     println!("\n{}", "═".repeat(60));
     println!(
         "{} {}",
-        "Show Theme CLI".bold().cyan(),
+        "Audio Theme Downloader".bold().cyan(),
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed()
     );
     println!("{}", "═".repeat(60));
@@ -278,7 +277,7 @@ async fn main() {
     let (scrapers, browsers) = init_scrapers(args.mode);
 
     // Create orchestrator
-    let mut orchestrator = Orchestrator::new(config, scrapers);
+    let mut orchestrator = Orchestrator::with_cancel_flag(config, scrapers, ctrlc_flag);
 
     // Start timer
     let start_time = Instant::now();

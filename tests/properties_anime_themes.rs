@@ -2,7 +2,7 @@
 // Feature: rust-rewrite, Property 9: Theme type priority selection
 
 use proptest::prelude::*;
-use show_theme_cli::scrapers::anime_themes::{Anime, AnimeTheme, AnimeThemesScraper};
+use audio_theme_downloader::scrapers::anime_themes::{Anime, AnimeTheme, AnimeThemesScraper};
 
 // Property 8: Best match selection by string similarity
 proptest! {

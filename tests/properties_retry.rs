@@ -1,7 +1,7 @@
 // Feature: rust-rewrite, Property tests for retry module
 
 use proptest::prelude::*;
-use show_theme_cli::retry::retry_with_backoff;
+use audio_theme_downloader::retry::retry_with_backoff;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
