@@ -79,13 +79,13 @@ Rewrite Show Theme CLI from Python to Rust (2024 edition), preserving all existi
     - **Property 11: YouTube duration filtering**
     - **Validates: Requirements 8.1, 8.2**
 
-- [ ] 7. Checkpoint - Ensure all tests pass
+- [x] 7. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Wire everything together and add logging
-  - [ ] 8.1 Complete `src/main.rs`: wire CLI args to OrchestratorConfig, initialize all scrapers in priority order, set up tracing-subscriber for file + console logging, add dependency validation (ffmpeg, chromium, yt-dlp), elapsed time display, and error handling (CriticalError, KeyboardInterrupt equivalent via ctrlc)
+- [x] 8. Wire everything together and add logging
+  - [x] 8.1 Complete `src/main.rs`: wire CLI args to OrchestratorConfig, initialize all scrapers in priority order, set up tracing-subscriber for file + console logging, add dependency validation (ffmpeg, chromium, yt-dlp), elapsed time display, and error handling (CriticalError, KeyboardInterrupt equivalent via ctrlc)
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 4.1, 10.6, 12.2, 12.3, 12.4_
-  - [ ] 8.2 Write property test for CLI invalid path rejection (Property 1)
+  - [x] 8.2 Write property test for CLI invalid path rejection (Property 1)
     - **Property 1: Invalid path rejection**
     - **Validates: Requirements 1.8**
 
