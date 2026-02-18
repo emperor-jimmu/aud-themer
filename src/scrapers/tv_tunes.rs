@@ -26,6 +26,8 @@ impl TvTunesScraper {
         if self.browser.is_none() {
             let (browser, mut handler) = Browser::launch(
                 BrowserConfig::builder()
+                    .arg("--ignore-certificate-errors")
+                    .arg("--ignore-ssl-errors")
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build browser config: {}", e))?
             )
@@ -58,38 +60,23 @@ impl TvTunesScraper {
             }
         ).await?;
 
-        // Navigate to home page
-        page.goto(BASE_URL)
+        // Navigate directly to search results page
+        let search_url = format!("{}/search.php?q={}", BASE_URL, urlencoding::encode(show_name));
+        
+        tracing::debug!("Searching TelevisionTunes for: {} at {}", show_name, search_url);
+        
+        page.goto(&search_url)
             .await
-            .context("Failed to navigate to TelevisionTunes")?
+            .context("Failed to navigate to search results")?
             .wait_for_navigation()
             .await
             .context("Failed to wait for navigation")?;
 
-        // Wait for page to load
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
-        // Find search input by role and type the show name
-        let search_input = page.find_element("input[role='searchbox']")
-            .await
-            .context("Failed to find search input")?;
-
-        search_input.click()
-            .await
-            .context("Failed to click search input")?;
-
-        search_input.type_str(show_name)
-            .await
-            .context("Failed to type show name")?;
-
-        search_input.press_key("Enter")
-            .await
-            .context("Failed to submit search")?;
-
         // Wait for search results to load
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-        // Find search result links - they're in the main content area
+        // Find search result links - look for links in the search results area
+        // The results are in a specific container, look for links to .html pages
         let results = page.find_elements("a[href*='.html']")
             .await
             .unwrap_or_default();
@@ -110,6 +97,7 @@ impl TvTunesScraper {
             } else {
                 format!("{}/{}", BASE_URL, href.trim_start_matches('/'))
             };
+            tracing::debug!("Found result page: {}", full_url);
             Ok(Some(full_url))
         } else {
             Ok(None)
@@ -127,13 +115,14 @@ impl TvTunesScraper {
             .context("Failed to wait for page load")?;
 
         // Wait for page to fully load
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         // Find download link - it's in the format /song/download/{id}
         let download_link = page.find_element("a[href*='/song/download/']")
             .await;
 
         if download_link.is_err() {
+            tracing::debug!("No download link found on page: {}", url);
             return Ok(false);
         }
 
@@ -149,10 +138,16 @@ impl TvTunesScraper {
                 format!("{}{}", BASE_URL, download_url)
             };
 
+            tracing::debug!("Attempting to download from: {}", full_url);
+
             // Download the file
-            let client = reqwest::Client::new();
-            let response = client.get(&full_url)
+            let client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
                 .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
+                .build()
+                .context("Failed to build HTTP client")?;
+                
+            let response = client.get(&full_url)
                 .send()
                 .await
                 .context("Failed to download audio file")?;
