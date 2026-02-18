@@ -86,11 +86,20 @@ pylint core/orchestrator.py
 ### Running the CLI
 
 ```bash
-# Basic usage
+# Basic usage (both mode - all sources)
 python main.py /path/to/tv_shows
 
+# TV shows only (TelevisionTunes, YouTube)
+python main.py /path/to/tv_shows --mode tv
+
+# Anime only (Themes.moe, AnimeThemes, YouTube)
+python main.py /path/to/anime --mode anime
+
+# YouTube only
+python main.py /path/to/shows --mode youtube
+
 # With options
-python main.py /path/to/tv_shows --force --verbose
+python main.py /path/to/tv_shows --mode tv --force --verbose
 
 # Dry run (no downloads)
 python main.py /path/to/tv_shows --dry-run

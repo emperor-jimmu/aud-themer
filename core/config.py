@@ -34,3 +34,4 @@ class Config:
     # File extensions
     THEME_EXTENSIONS = ['.mp3', '.flac', '.wav']
     DEFAULT_THEME_FILENAME = 'theme.mp3'
+    THEME_FOLDER_NAME = 'theme-music'  # Subfolder for theme files

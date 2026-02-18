@@ -22,8 +22,6 @@ htmlcov/
 Thumbs.db
 
 # Project specific
-theme.mp3
-theme.flac
-theme.wav
+theme-music/
 temp_*.webm
 *.log

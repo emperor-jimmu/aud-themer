@@ -46,7 +46,10 @@ The `Orchestrator` class coordinates the entire workflow:
 
 1. Scans directory for series folders
 2. Checks for existing theme files
-3. Tries scrapers in priority order (TelevisionTunes → AnimeThemes → Themes.moe → YouTube)
+3. Tries scrapers in priority order based on content mode:
+   - TV Mode: TelevisionTunes → YouTube
+   - Anime Mode: AnimeThemes → Themes.moe → YouTube
+   - Both Mode: TelevisionTunes → AnimeThemes → Themes.moe → YouTube
 4. Aggregates results and displays summary
 
 ### Fail-Fast with Fallback
@@ -65,7 +68,7 @@ All user-facing output uses Rich library for:
 
 ### Output Files
 
-- All theme files are saved as `theme.mp3` in the series folder
+- All theme files are saved as `theme.mp3` in a `theme-music` subfolder within each series folder
 - Temporary files use `temp_*.webm` pattern (cleaned up after processing)
 
 ### Test Files
@@ -126,5 +129,7 @@ Errors in one show don't affect processing of other shows. Each series folder is
 
 - Python artifacts: `__pycache__/`, `*.pyc`, `.pytest_cache/`
 - Virtual environments: `venv/`, `.venv/`
-- Output files: `theme.mp3`, `theme.flac`, `theme.wav`, `temp_*.webm`
+- Output folders: `theme-music/`
+- Temporary files: `temp_*.webm`
+- Log files: `*.log`
 - IDE files: `.vscode/`, `.idea/`

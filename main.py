@@ -5,12 +5,21 @@ import sys
 import logging
 from datetime import datetime
 import time
+from enum import Enum
 import typer
 from rich.console import Console
-from core.orchestrator import Orchestrator, CriticalError
+from core.orchestrator import Orchestrator, CriticalError, ContentMode
 from core.dependencies import validate_dependencies
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
+
+
+class ModeChoice(str, Enum):
+    """Content mode choices for CLI."""
+    TV = "tv"
+    ANIME = "anime"
+    BOTH = "both"
+    YOUTUBE = "youtube"
 
 app = typer.Typer(
     help="Automate theme song downloads for TV shows and anime",
@@ -28,6 +37,12 @@ def main(
         file_okay=False,
         dir_okay=True,
         resolve_path=True
+    ),
+    mode: ModeChoice = typer.Option(
+        ModeChoice.BOTH,
+        "--mode",
+        "-m",
+        help="Content type: tv (TelevisionTunes, YouTube), anime (Themes.moe, AnimeThemes, YouTube), both (all sources), or youtube (YouTube only)"
     ),
     force: bool = typer.Option(
         False,
@@ -62,20 +77,42 @@ def main(
     Scan a directory of TV shows/anime and download theme songs.
 
     The tool will scan each subdirectory in INPUT_DIR, identify the show name,
-    and attempt to download theme songs from multiple sources in priority order:
+    and attempt to download theme songs from sources based on the selected mode:
 
-    1. TelevisionTunes.co.uk (best for TV shows)
-    2. AnimeThemes.moe (best for anime)
-    3. Themes.moe (additional anime source)
-    4. YouTube (fallback for everything)
+    TV Mode (--mode tv):
+    1. TelevisionTunes.co.uk
+    2. YouTube (fallback)
+
+    Anime Mode (--mode anime):
+    1. Themes.moe
+    2. AnimeThemes.moe
+    3. YouTube (fallback)
+
+    Both Mode (--mode both, default):
+    1. TelevisionTunes.co.uk
+    2. Themes.moe
+    3. AnimeThemes.moe
+    4. YouTube (fallback)
+
+    YouTube Mode (--mode youtube):
+    1. YouTube only
 
     By default, folders with existing theme files are skipped. Use --force to
     overwrite existing files.
 
     Examples:
 
-        # Basic usage
-        python main.py /path/to/tv_shows
+        # Process TV shows only
+        python main.py /path/to/tv_shows --mode tv
+
+        # Process anime only
+        python main.py /path/to/anime --mode anime
+
+        # Process both (default)
+        python main.py /path/to/shows --mode both
+
+        # Use YouTube only
+        python main.py /path/to/shows --mode youtube
 
         # Force overwrite existing themes
         python main.py /path/to/tv_shows --force
@@ -112,19 +149,29 @@ def main(
     # Set logging level based on verbose flag
     log_level = logging.DEBUG if verbose else logging.INFO
     
+    # Configure handlers with UTF-8 encoding
+    handlers = [logging.FileHandler(log_file, encoding='utf-8')]
+    if verbose:
+        # Use UTF-8 encoding for console output to handle Unicode characters
+        import io
+        stream_handler = logging.StreamHandler(
+            io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+        )
+        handlers.append(stream_handler)
+    else:
+        handlers.append(logging.NullHandler())
+    
     logging.basicConfig(
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler() if verbose else logging.NullHandler()
-        ]
+        handlers=handlers
     )
     logger = logging.getLogger(__name__)
     
     # Log startup information
     logger.info(f"Show Theme CLI v{__version__} started")
     logger.info(f"Input directory: {input_dir}")
+    logger.info(f"Mode: {mode.value}")
     logger.info(f"Force mode: {force}")
     logger.info(f"Dry run: {dry_run}")
     logger.info(f"Timeout: {timeout}s")
@@ -132,8 +179,11 @@ def main(
     # Validate dependencies before processing
     validate_dependencies(console)
 
+    # Convert mode enum to ContentMode
+    content_mode = ContentMode[mode.value.upper()]
+
     try:
-        orchestrator = Orchestrator(console, force, dry_run, verbose, timeout)
+        orchestrator = Orchestrator(console, force, dry_run, verbose, timeout, content_mode)
         orchestrator.process_directory(input_dir)
         
         # Display elapsed time
