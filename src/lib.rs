@@ -9,6 +9,10 @@ pub mod orchestrator;
 use std::path::Path;
 
 /// Validate that the input path exists and is a directory
+///
+/// # Errors
+///
+/// Returns an error if the path does not exist or is not a directory.
 pub fn validate_input_path(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Err(format!(

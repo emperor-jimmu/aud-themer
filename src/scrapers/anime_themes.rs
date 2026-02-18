@@ -49,36 +49,39 @@ pub struct AnimeThemesScraper {
 }
 
 impl AnimeThemesScraper {
+    /// Create a new `AnimeThemesScraper` instance
+    ///
+    /// # Panics
+    ///
+    /// Panics if the HTTP client cannot be built (e.g., TLS backend issues).
+    #[must_use]
     pub fn new() -> Self {
         Self {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
                 .build()
-                .unwrap(),
+                .expect("Failed to build HTTP client"),
         }
     }
 
     /// Select the best matching anime from search results
+    #[must_use]
     pub fn select_best_match<'a>(anime_list: &'a [Anime], query: &str) -> Option<&'a Anime> {
         if anime_list.is_empty() {
             return None;
         }
 
-        let mut best_match = &anime_list[0];
-        let mut best_score = strsim::jaro_winkler(&anime_list[0].name.to_lowercase(), &query.to_lowercase());
-
-        for anime in &anime_list[1..] {
-            let score = strsim::jaro_winkler(&anime.name.to_lowercase(), &query.to_lowercase());
-            if score > best_score {
-                best_score = score;
-                best_match = anime;
-            }
-        }
-
-        Some(best_match)
+        let query_lower = query.to_lowercase();
+        anime_list.iter()
+            .max_by(|a, b| {
+                let score_a = strsim::jaro_winkler(&a.name.to_lowercase(), &query_lower);
+                let score_b = strsim::jaro_winkler(&b.name.to_lowercase(), &query_lower);
+                score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+            })
     }
 
     /// Select the best theme based on priority: OP1 > OP > first available
+    #[must_use]
     pub fn select_best_theme(themes: &[AnimeTheme]) -> Option<&AnimeTheme> {
         if themes.is_empty() {
             return None;
@@ -166,21 +169,18 @@ impl Default for AnimeThemesScraper {
 impl ThemeScraper for AnimeThemesScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
         // Search for anime
-        let anime = match self.search_anime(show_name).await? {
-            Some(a) => a,
-            None => return Ok(false),
+        let Some(anime) = self.search_anime(show_name).await? else {
+            return Ok(false);
         };
 
         // Select best theme
-        let theme = match Self::select_best_theme(&anime.anime_themes) {
-            Some(t) => t,
-            None => return Ok(false),
+        let Some(theme) = Self::select_best_theme(&anime.anime_themes) else {
+            return Ok(false);
         };
 
         // Extract video URL
-        let video_url = match Self::extract_video_url(theme) {
-            Some(url) => url,
-            None => return Ok(false),
+        let Some(video_url) = Self::extract_video_url(theme) else {
+            return Ok(false);
         };
 
         // Download video to temporary file
@@ -197,7 +197,7 @@ impl ThemeScraper for AnimeThemesScraper {
         Ok(true)
     }
 
-    fn source_name(&self) -> &str {
+    fn source_name(&self) -> &'static str {
         "AnimeThemes"
     }
 }

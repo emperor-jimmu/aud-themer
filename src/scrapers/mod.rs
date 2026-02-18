@@ -37,5 +37,5 @@ pub trait ThemeScraper: Send + Sync {
     ) -> anyhow::Result<bool>;
 
     /// Returns the human-readable name of this scraper source
-    fn source_name(&self) -> &str;
+    fn source_name(&self) -> &'static str;
 }

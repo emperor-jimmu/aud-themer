@@ -20,6 +20,8 @@ pub struct TvTunesScraper {
 }
 
 impl TvTunesScraper {
+    /// Create a new `TvTunesScraper` instance
+    #[must_use]
     pub fn new() -> Self {
         Self { 
             browser: Arc::new(Mutex::new(None))
@@ -35,7 +37,7 @@ impl TvTunesScraper {
                     .arg("--ignore-certificate-errors")
                     .arg("--ignore-ssl-errors")
                     .build()
-                    .map_err(|e| anyhow::anyhow!("Failed to build browser config: {}", e))?
+                    .map_err(|e| anyhow::anyhow!("Failed to build browser config: {e}"))?
             )
             .await
             .context("Failed to launch browser")?;
@@ -145,7 +147,7 @@ impl TvTunesScraper {
             let full_url = if download_url.starts_with("http") {
                 download_url
             } else {
-                format!("{}{}", BASE_URL, download_url)
+                format!("{BASE_URL}{download_url}")
             };
 
             tracing::debug!("Attempting to download from: {}", full_url);
@@ -222,16 +224,15 @@ impl Default for TvTunesScraper {
 impl ThemeScraper for TvTunesScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
         // Search for the show
-        let result_url = match self.search_show(show_name).await? {
-            Some(url) => url,
-            None => return Ok(false),
+        let Some(result_url) = self.search_show(show_name).await? else {
+            return Ok(false);
         };
 
         // Download from the result page
         self.download_from_page(&result_url, output_path).await
     }
 
-    fn source_name(&self) -> &str {
+    fn source_name(&self) -> &'static str {
         "TelevisionTunes"
     }
 }

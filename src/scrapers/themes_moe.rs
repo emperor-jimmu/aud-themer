@@ -20,6 +20,8 @@ pub struct ThemesMoeScraper {
 }
 
 impl ThemesMoeScraper {
+    /// Create a new `ThemesMoeScraper` instance
+    #[must_use]
     pub fn new() -> Self {
         Self { 
             browser: Arc::new(Mutex::new(None))
@@ -35,7 +37,7 @@ impl ThemesMoeScraper {
                     .arg("--ignore-certificate-errors")
                     .arg("--ignore-ssl-errors")
                     .build()
-                    .map_err(|e| anyhow::anyhow!("Failed to build browser config: {}", e))?
+                    .map_err(|e| anyhow::anyhow!("Failed to build browser config: {e}"))?
             )
             .await
             .context("Failed to launch browser")?;
@@ -199,16 +201,15 @@ impl Default for ThemesMoeScraper {
 impl ThemeScraper for ThemesMoeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
         // Search for the anime
-        let media_url = match self.search_anime(show_name).await? {
-            Some(url) => url,
-            None => return Ok(false),
+        let Some(media_url) = self.search_anime(show_name).await? else {
+            return Ok(false);
         };
 
         // Download the media
         self.download_media(&media_url, output_path).await
     }
 
-    fn source_name(&self) -> &str {
+    fn source_name(&self) -> &'static str {
         "Themes.moe"
     }
 }

@@ -73,6 +73,7 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     /// Create a new orchestrator with the given configuration and scrapers
+    #[must_use]
     pub fn new(
         config: OrchestratorConfig,
         scrapers: Vec<Box<dyn ThemeScraper>>,
@@ -88,14 +89,19 @@ impl Orchestrator {
     }
 
     /// Get the current processing results
-    pub fn results(&self) -> &ProcessingResults {
+    #[must_use]
+    pub const fn results(&self) -> &ProcessingResults {
         &self.results
     }
 
     /// Process a directory containing show folders
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the directory cannot be read or if there are critical I/O failures.
     pub async fn process_directory(&mut self, input_dir: &Path) -> Result<()> {
         // Scan directory for show folders
-        let show_folders = self.scan_directory(input_dir)?;
+        let show_folders = Self::scan_directory(input_dir)?;
 
         if show_folders.is_empty() {
             println!("{}", "No series folders found in the input directory.".yellow());
@@ -123,7 +129,7 @@ impl Orchestrator {
     }
 
     /// Scan directory and return list of show folders
-    fn scan_directory(&self, input_dir: &Path) -> Result<Vec<ShowFolder>> {
+    fn scan_directory(input_dir: &Path) -> Result<Vec<ShowFolder>> {
         let mut show_folders = Vec::new();
 
         let entries = fs::read_dir(input_dir)?;
@@ -184,12 +190,8 @@ impl Orchestrator {
         );
 
         // Check for existing theme
-        if let Some(existing_theme) = self.check_existing_theme(&show_folder.path) {
-            if !self.config.force {
-                println!("  {} Already has theme: {}", "⊘".yellow(), existing_theme);
-                self.results.skipped += 1;
-                return;
-            } else {
+        if let Some(existing_theme) = Self::check_existing_theme(&show_folder.path) {
+            if self.config.force {
                 // Force mode: delete existing theme
                 println!("  {} Deleting existing theme: {}", "⚠".yellow(), existing_theme);
                 if let Err(err) = fs::remove_file(show_folder.path.join(&existing_theme)) {
@@ -201,6 +203,10 @@ impl Orchestrator {
                     self.results.failed += 1;
                     return;
                 }
+            } else {
+                println!("  {} Already has theme: {}", "⊘".yellow(), existing_theme);
+                self.results.skipped += 1;
+                return;
             }
         }
 
@@ -211,10 +217,8 @@ impl Orchestrator {
         }
 
         // Try scrapers in order
-        let mut attempted_sources = Vec::new();
         for scraper in &self.scrapers {
             let source_name = scraper.source_name();
-            attempted_sources.push(source_name.to_string());
 
             println!("  {} Trying {}...", "→".cyan(), source_name);
 
@@ -264,9 +268,9 @@ impl Orchestrator {
     }
 
     /// Check if a theme file already exists in the folder
-    fn check_existing_theme(&self, folder_path: &Path) -> Option<String> {
+    fn check_existing_theme(folder_path: &Path) -> Option<String> {
         for ext in Config::THEME_EXTENSIONS {
-            let theme_file = format!("theme{}", ext);
+            let theme_file = format!("theme{ext}");
             let theme_path = folder_path.join(&theme_file);
             if theme_path.exists() {
                 return Some(theme_file);

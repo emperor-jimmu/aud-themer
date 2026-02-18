@@ -9,6 +9,7 @@ static YEAR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Sanitize a filename by removing or replacing invalid characters
+#[must_use]
 pub fn sanitize_filename(filename: &str) -> String {
     filename
         .chars()
@@ -23,21 +24,20 @@ pub fn sanitize_filename(filename: &str) -> String {
 }
 
 /// Validate that a file meets the minimum size requirement
+#[must_use]
 pub fn validate_file_size(path: &Path, min_size: u64) -> bool {
-    if let Ok(metadata) = fs::metadata(path) {
-        metadata.len() >= min_size
-    } else {
-        false
-    }
+    fs::metadata(path).is_ok_and(|metadata| metadata.len() >= min_size)
 }
 
 /// Get formatted file size string (e.g., "1.5 MB")
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
 pub fn get_file_size_formatted(path: &Path) -> String {
     match fs::metadata(path) {
         Ok(metadata) => {
             let size = metadata.len();
             if size < 1024 {
-                format!("{} B", size)
+                format!("{size} B")
             } else if size < 1024 * 1024 {
                 format!("{:.1} KB", size as f64 / 1024.0)
             } else if size < 1024 * 1024 * 1024 {
@@ -51,10 +51,14 @@ pub fn get_file_size_formatted(path: &Path) -> String {
 }
 
 /// Sanitize input for subprocess calls by removing dangerous characters
+///
+/// # Errors
+///
+/// Returns an error if the input exceeds the maximum length or contains path traversal sequences.
 pub fn sanitize_for_subprocess(value: &str, max_length: usize) -> Result<String> {
     // Check length
     if value.len() > max_length {
-        anyhow::bail!("Input exceeds maximum length of {} characters", max_length);
+        anyhow::bail!("Input exceeds maximum length of {max_length} characters");
     }
 
     // Remove shell metacharacters and control characters
@@ -75,6 +79,8 @@ pub fn sanitize_for_subprocess(value: &str, max_length: usize) -> Result<String>
 }
 
 /// Validate a show name for safety and length
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
 pub fn validate_show_name(name: &str) -> bool {
     if name.is_empty() || name.len() > 200 {
         return false;
@@ -92,6 +98,10 @@ pub fn validate_show_name(name: &str) -> bool {
 }
 
 /// Validate an output path exists and is a directory
+///
+/// # Errors
+///
+/// Returns an error if the path does not exist or is not a directory.
 pub fn validate_output_path(path: &Path) -> Result<()> {
     if !path.exists() {
         anyhow::bail!("Path does not exist: {}", path.display());
@@ -105,6 +115,7 @@ pub fn validate_output_path(path: &Path) -> Result<()> {
 }
 
 /// Strip year suffix from show name (e.g., "The Simpsons (1989)" -> "The Simpsons")
+#[must_use]
 pub fn strip_year_from_show_name(name: &str) -> String {
     // Match pattern like " (YYYY)" at the end of the string
     YEAR_REGEX.replace(name, "").trim().to_string()

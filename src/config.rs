@@ -12,10 +12,10 @@ impl Config {
     pub const DOWNLOAD_TIMEOUT_SEC: u64 = 60;
     
     /// Audio bitrate for MP3 conversion
-    pub const AUDIO_BITRATE: &'static str = "320k";
+    pub const AUDIO_BITRATE: &str = "320k";
     
-    /// Audio codec for FFmpeg
-    pub const AUDIO_CODEC: &'static str = "libmp3lame";
+    /// Audio codec for `FFmpeg`
+    pub const AUDIO_CODEC: &str = "libmp3lame";
     
     /// Maximum video duration in seconds (10 minutes)
     pub const MAX_VIDEO_DURATION_SEC: u64 = 600;
@@ -32,9 +32,9 @@ impl Config {
     /// Retry backoff factor for exponential backoff
     pub const RETRY_BACKOFF_FACTOR: f64 = 2.0;
     
-    /// FFmpeg operation timeout in seconds
+    /// `FFmpeg` operation timeout in seconds
     pub const FFMPEG_TIMEOUT_SEC: u64 = 60;
     
     /// Valid theme file extensions
-    pub const THEME_EXTENSIONS: &'static [&'static str] = &[".mp3", ".flac", ".wav"];
+    pub const THEME_EXTENSIONS: &[&str] = &[".mp3", ".flac", ".wav"];
 }

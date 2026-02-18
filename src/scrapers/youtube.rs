@@ -18,11 +18,14 @@ struct VideoInfo {
 pub struct YouTubeScraper;
 
 impl YouTubeScraper {
+    /// Create a new `YouTubeScraper` instance
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
 
     /// Generate search query variations for a show
+    #[must_use]
     pub fn generate_search_queries(show_name: &str) -> Vec<String> {
         vec![
             format!("{} theme song", show_name),
@@ -35,6 +38,7 @@ impl YouTubeScraper {
     }
 
     /// Check if video duration is acceptable (≤ 600 seconds)
+    #[must_use]
     pub fn is_duration_acceptable(duration_secs: f64) -> bool {
         duration_secs <= Config::MAX_VIDEO_DURATION_SEC as f64
     }
@@ -79,7 +83,8 @@ impl YouTubeScraper {
             .arg("--audio-quality")
             .arg("0") // Best quality
             .arg("--output")
-            .arg(output_path.with_extension("").to_str().unwrap())
+            .arg(output_path.with_extension("").to_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid output path: non-UTF-8 characters"))?)
             .arg(&url)
             .output()
             .await
@@ -136,7 +141,7 @@ impl ThemeScraper for YouTubeScraper {
         Ok(false)
     }
 
-    fn source_name(&self) -> &str {
+    fn source_name(&self) -> &'static str {
         "YouTube"
     }
 }
