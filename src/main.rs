@@ -58,6 +58,10 @@ pub struct CliArgs {
     /// Network timeout in seconds
     #[arg(short, long, default_value_t = 30)]
     pub timeout: u64,
+
+    /// Directory for log files (default: current directory)
+    #[arg(long, value_name = "LOG_DIR")]
+    pub log_dir: Option<PathBuf>,
 }
 
 /// Check if a command is available in PATH
@@ -106,7 +110,7 @@ fn validate_dependencies() -> Result<(), String> {
 }
 
 /// Initialize tracing/logging based on verbosity
-fn init_logging(verbose: bool) {
+fn init_logging(verbose: bool, log_dir: Option<PathBuf>) {
     // In non-verbose mode, suppress all logs except errors
     // In verbose mode, show debug level logs
     let log_level = if verbose { "debug" } else { "error" };
@@ -119,12 +123,35 @@ fn init_logging(verbose: bool) {
 
     // Only create log files in verbose mode to avoid littering the directory
     if verbose {
+        // Determine log directory (default to current directory)
+        let log_directory = log_dir.unwrap_or_else(|| PathBuf::from("."));
+        
+        // Create log directory if it doesn't exist
+        if !log_directory.exists() {
+            if let Err(e) = std::fs::create_dir_all(&log_directory) {
+                eprintln!("Warning: Failed to create log directory: {}", e);
+                eprintln!("Logs will not be written to disk.");
+                
+                // Fall back to console-only logging
+                let subscriber = tracing_subscriber::fmt()
+                    .with_env_filter(filter)
+                    .with_writer(std::io::sink)
+                    .with_ansi(false)
+                    .finish();
+
+                tracing::subscriber::set_global_default(subscriber)
+                    .expect("Failed to set tracing subscriber");
+                return;
+            }
+        }
+
         // Create log file with timestamp
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let log_file = format!("{}.log", timestamp);
+        let log_filename = format!("show-theme-cli_{}.log", timestamp);
+        let log_path = log_directory.join(&log_filename);
 
-        // Set up file logging
-        let file_appender = tracing_appender::rolling::never(".", &log_file);
+        // Set up file logging using rolling appender
+        let file_appender = tracing_appender::rolling::never(&log_directory, log_filename.clone());
 
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(filter)
@@ -135,7 +162,7 @@ fn init_logging(verbose: bool) {
         tracing::subscriber::set_global_default(subscriber)
             .expect("Failed to set tracing subscriber");
 
-        println!("{} Logging to {}", "ℹ".blue(), log_file);
+        println!("{} Logging to {}", "ℹ".blue(), log_path.display());
     } else {
         // Non-verbose mode: suppress all logs to console (only errors will show)
         let subscriber = tracing_subscriber::fmt()
@@ -215,7 +242,7 @@ async fn main() {
     }
 
     // Initialize logging
-    init_logging(args.verbose);
+    init_logging(args.verbose, args.log_dir.clone());
     info!("Show Theme CLI v{} starting", env!("CARGO_PKG_VERSION"));
     info!("Input directory: {}", input_dir.display());
 

@@ -22,3 +22,4 @@ Thumbs.db
 theme-music/
 temp_*.webm
 *.log
+.chromium/
