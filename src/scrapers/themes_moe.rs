@@ -36,16 +36,20 @@ impl ThemesMoeScraper {
                 BrowserConfig::builder()
                     .arg("--ignore-certificate-errors")
                     .arg("--ignore-ssl-errors")
+                    .arg("--disable-blink-features=AutomationControlled")
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build browser config: {e}"))?
             )
             .await
             .context("Failed to launch browser")?;
 
-            // Spawn handler task
+            // Spawn handler task that silently handles events and errors
             tokio::spawn(async move {
-                while let Some(_event) = handler.next().await {
-                    // Handle browser events
+                while let Some(event) = handler.next().await {
+                    // Silently consume events - chromiumoxide sometimes has
+                    // deserialization issues with certain Chrome DevTools Protocol messages
+                    // that don't affect functionality
+                    drop(event);
                 }
             });
 

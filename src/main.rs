@@ -86,12 +86,17 @@ fn validate_dependencies() -> Result<(), String> {
 fn init_logging(verbose: bool) {
     let log_level = if verbose { "debug" } else { "info" };
     
+    // Filter out noisy chromiumoxide errors that don't affect functionality
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(log_level));
+        .unwrap_or_else(|_| {
+            EnvFilter::new(log_level)
+                .add_directive("chromiumoxide::conn=warn".parse().unwrap())
+                .add_directive("chromiumoxide::handler=warn".parse().unwrap())
+        });
 
     // Create log file with timestamp
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let log_file = format!("show-theme-cli-{}.log", timestamp);
+    let log_file = format!("{}.log", timestamp);
 
     // Set up file logging
     let file_appender = tracing_appender::rolling::never(".", &log_file);

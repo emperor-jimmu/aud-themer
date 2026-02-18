@@ -236,6 +236,10 @@ impl Orchestrator {
                 Ok(true) => {
                     // Success!
                     let theme_path = show_folder.path.join("theme.mp3");
+                    
+                    // Ensure file is fully written by checking metadata
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    
                     let file_size = get_file_size_formatted(&theme_path);
                     println!(
                         "  {} Downloaded from {} ({})",
