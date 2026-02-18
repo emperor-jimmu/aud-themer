@@ -192,7 +192,7 @@ impl Orchestrator {
             } else {
                 // Force mode: delete existing theme
                 println!("  {} Deleting existing theme: {}", "⚠".yellow(), existing_theme);
-                if let Err(err) = fs::remove_file(&show_folder.path.join(&existing_theme)) {
+                if let Err(err) = fs::remove_file(show_folder.path.join(&existing_theme)) {
                     eprintln!(
                         "  {} Failed to delete existing theme: {}",
                         "Error:".red(),

@@ -113,10 +113,10 @@ impl ThemeScraper for YouTubeScraper {
             };
 
             // Check duration
-            if let Some(duration) = video_info.duration {
-                if !Self::is_duration_acceptable(duration) {
-                    continue; // Try next query
-                }
+            if let Some(duration) = video_info.duration
+                && !Self::is_duration_acceptable(duration)
+            {
+                continue; // Try next query
             }
 
             // Get video ID

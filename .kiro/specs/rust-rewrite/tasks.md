@@ -103,7 +103,7 @@ Rewrite Show Theme CLI from Python to Rust (2024 edition), preserving all existi
   - [x] 9.6 Update `.kiro/steering/product.md` to note the Rust implementation
     - _Requirements: 15.4_
 
-- [ ] 10. Final checkpoint - Ensure all tests pass
+- [x] 10. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
