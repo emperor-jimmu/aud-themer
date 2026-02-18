@@ -40,14 +40,17 @@ impl RateLimiter {
             let min_delay = Duration::from_millis(self.min_delay_ms);
             
             if elapsed < min_delay {
-                let remaining = min_delay - elapsed;
+                let remaining = min_delay.saturating_sub(elapsed);
                 sleep(remaining).await;
             }
         }
         
         // Add random jitter between min and max delay
-        let mut rng = rand::thread_rng();
-        let jitter_ms = rng.gen_range(self.min_delay_ms..=self.max_delay_ms);
+        // Scope the RNG so it's dropped before the await (Send safety)
+        let jitter_ms = {
+            let mut rng = rand::thread_rng();
+            rng.gen_range(self.min_delay_ms..=self.max_delay_ms)
+        };
         sleep(Duration::from_millis(jitter_ms)).await;
         
         // Record this attempt

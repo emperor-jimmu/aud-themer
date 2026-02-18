@@ -1,9 +1,11 @@
 use async_trait::async_trait;
 use std::path::Path;
+use std::sync::Arc;
 use anyhow::{Result, Context};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 use futures::StreamExt;
 
 use super::ThemeScraper;
@@ -14,16 +16,20 @@ use crate::retry::retry_with_backoff;
 const BASE_URL: &str = "https://themes.moe";
 
 pub struct ThemesMoeScraper {
-    browser: Option<Browser>,
+    browser: Arc<Mutex<Option<Browser>>>,
 }
 
 impl ThemesMoeScraper {
     pub fn new() -> Self {
-        Self { browser: None }
+        Self { 
+            browser: Arc::new(Mutex::new(None))
+        }
     }
 
-    async fn ensure_browser(&mut self) -> Result<&Browser> {
-        if self.browser.is_none() {
+    async fn ensure_browser(&self) -> Result<()> {
+        let mut browser_guard = self.browser.lock().await;
+        
+        if browser_guard.is_none() {
             let (browser, mut handler) = Browser::launch(
                 BrowserConfig::builder()
                     .arg("--ignore-certificate-errors")
@@ -41,14 +47,16 @@ impl ThemesMoeScraper {
                 }
             });
 
-            self.browser = Some(browser);
+            *browser_guard = Some(browser);
         }
 
-        Ok(self.browser.as_ref().unwrap())
+        Ok(())
     }
 
-    async fn search_anime(&mut self, show_name: &str) -> Result<Option<String>> {
-        let browser = self.ensure_browser().await?;
+    async fn search_anime(&self, show_name: &str) -> Result<Option<String>> {
+        self.ensure_browser().await?;
+        let browser_guard = self.browser.lock().await;
+        let browser = browser_guard.as_ref().unwrap();
         
         let page = retry_with_backoff(
             Config::MAX_RETRY_ATTEMPTS,
@@ -139,7 +147,7 @@ impl ThemesMoeScraper {
         }
     }
 
-    async fn download_media(&mut self, url: &str, output_path: &Path) -> Result<bool> {
+    async fn download_media(&self, url: &str, output_path: &Path) -> Result<bool> {
         // The URL is a direct link to the .webm file, no need for browser
         tracing::debug!("Downloading media from: {}", url);
 
@@ -187,26 +195,17 @@ impl Default for ThemesMoeScraper {
     }
 }
 
-impl Drop for ThemesMoeScraper {
-    fn drop(&mut self) {
-        // Browser cleanup happens automatically
-    }
-}
-
 #[async_trait]
 impl ThemeScraper for ThemesMoeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
-        // Need mutable self for browser operations
-        let mut scraper = Self::new();
-        
         // Search for the anime
-        let media_url = match scraper.search_anime(show_name).await? {
+        let media_url = match self.search_anime(show_name).await? {
             Some(url) => url,
             None => return Ok(false),
         };
 
         // Download the media
-        scraper.download_media(&media_url, output_path).await
+        self.download_media(&media_url, output_path).await
     }
 
     fn source_name(&self) -> &str {

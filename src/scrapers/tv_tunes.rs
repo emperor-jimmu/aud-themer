@@ -1,9 +1,11 @@
 use async_trait::async_trait;
 use std::path::Path;
+use std::sync::Arc;
 use anyhow::{Result, Context};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 use futures::StreamExt;
 
 use super::ThemeScraper;
@@ -14,16 +16,20 @@ use crate::retry::retry_with_backoff;
 const BASE_URL: &str = "https://www.televisiontunes.com";
 
 pub struct TvTunesScraper {
-    browser: Option<Browser>,
+    browser: Arc<Mutex<Option<Browser>>>,
 }
 
 impl TvTunesScraper {
     pub fn new() -> Self {
-        Self { browser: None }
+        Self { 
+            browser: Arc::new(Mutex::new(None))
+        }
     }
 
-    async fn ensure_browser(&mut self) -> Result<&Browser> {
-        if self.browser.is_none() {
+    async fn ensure_browser(&self) -> Result<()> {
+        let mut browser_guard = self.browser.lock().await;
+        
+        if browser_guard.is_none() {
             let (browser, mut handler) = Browser::launch(
                 BrowserConfig::builder()
                     .arg("--ignore-certificate-errors")
@@ -41,14 +47,16 @@ impl TvTunesScraper {
                 }
             });
 
-            self.browser = Some(browser);
+            *browser_guard = Some(browser);
         }
 
-        Ok(self.browser.as_ref().unwrap())
+        Ok(())
     }
 
-    async fn search_show(&mut self, show_name: &str) -> Result<Option<String>> {
-        let browser = self.ensure_browser().await?;
+    async fn search_show(&self, show_name: &str) -> Result<Option<String>> {
+        self.ensure_browser().await?;
+        let browser_guard = self.browser.lock().await;
+        let browser = browser_guard.as_ref().unwrap();
         
         let page = retry_with_backoff(
             Config::MAX_RETRY_ATTEMPTS,
@@ -104,8 +112,10 @@ impl TvTunesScraper {
         }
     }
 
-    async fn download_from_page(&mut self, url: &str, output_path: &Path) -> Result<bool> {
-        let browser = self.ensure_browser().await?;
+    async fn download_from_page(&self, url: &str, output_path: &Path) -> Result<bool> {
+        self.ensure_browser().await?;
+        let browser_guard = self.browser.lock().await;
+        let browser = browser_guard.as_ref().unwrap();
         let page = browser.new_page(url)
             .await
             .context("Failed to create page for download")?;
@@ -208,26 +218,17 @@ impl Default for TvTunesScraper {
     }
 }
 
-impl Drop for TvTunesScraper {
-    fn drop(&mut self) {
-        // Browser cleanup happens automatically
-    }
-}
-
 #[async_trait]
 impl ThemeScraper for TvTunesScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
-        // Need mutable self for browser operations
-        let mut scraper = Self::new();
-        
         // Search for the show
-        let result_url = match scraper.search_show(show_name).await? {
+        let result_url = match self.search_show(show_name).await? {
             Some(url) => url,
             None => return Ok(false),
         };
 
         // Download from the result page
-        scraper.download_from_page(&result_url, output_path).await
+        self.download_from_page(&result_url, output_path).await
     }
 
     fn source_name(&self) -> &str {

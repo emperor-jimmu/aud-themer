@@ -1,7 +1,12 @@
 use std::path::Path;
 use std::fs;
+use std::sync::LazyLock;
 use anyhow::Result;
 use regex::Regex;
+
+static YEAR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\s*\(\d{4}\)\s*$").expect("Failed to compile year regex")
+});
 
 /// Sanitize a filename by removing or replacing invalid characters
 pub fn sanitize_filename(filename: &str) -> String {
@@ -102,8 +107,7 @@ pub fn validate_output_path(path: &Path) -> Result<()> {
 /// Strip year suffix from show name (e.g., "The Simpsons (1989)" -> "The Simpsons")
 pub fn strip_year_from_show_name(name: &str) -> String {
     // Match pattern like " (YYYY)" at the end of the string
-    let re = Regex::new(r"\s*\(\d{4}\)\s*$").unwrap();
-    re.replace(name, "").trim().to_string()
+    YEAR_REGEX.replace(name, "").trim().to_string()
 }
 
 #[cfg(test)]
