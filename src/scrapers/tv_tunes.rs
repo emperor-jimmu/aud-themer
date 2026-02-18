@@ -24,6 +24,8 @@ impl TvTunesScraper {
     }
 
     async fn search_show(&self, show_name: &str) -> Result<Option<String>> {
+        tracing::info!("[TelevisionTunes] Starting search for: {}", show_name);
+        
         let browser_arc = self.browser.get().await?;
         let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
@@ -41,7 +43,7 @@ impl TvTunesScraper {
         // Navigate directly to search results page
         let search_url = format!("{}/search.php?q={}", BASE_URL, urlencoding::encode(show_name));
         
-        tracing::debug!("Searching TelevisionTunes for: {} at {}", show_name, search_url);
+        tracing::info!("[TelevisionTunes] Navigating to search URL: {}", search_url);
         
         page.goto(&search_url)
             .await
@@ -58,7 +60,10 @@ impl TvTunesScraper {
             .await
             .unwrap_or_default();
 
+        tracing::info!("[TelevisionTunes] Found {} search results", results.len());
+
         if results.is_empty() {
+            tracing::info!("[TelevisionTunes] No results found for: {}", show_name);
             return Ok(None);
         }
 
@@ -74,14 +79,17 @@ impl TvTunesScraper {
             } else {
                 format!("{}/{}", BASE_URL, href.trim_start_matches('/'))
             };
-            tracing::debug!("Found result page: {}", full_url);
+            tracing::info!("[TelevisionTunes] Selected result page: {}", full_url);
             Ok(Some(full_url))
         } else {
+            tracing::warn!("[TelevisionTunes] First result has no href attribute");
             Ok(None)
         }
     }
 
     async fn download_from_page(&self, url: &str, output_path: &Path) -> Result<bool> {
+        tracing::info!("[TelevisionTunes] Opening result page: {}", url);
+        
         let browser_arc = self.browser.get().await?;
         let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
@@ -101,7 +109,7 @@ impl TvTunesScraper {
             .await;
 
         if download_link.is_err() {
-            tracing::debug!("No download link found on page: {}", url);
+            tracing::warn!("[TelevisionTunes] No download link found on page: {}", url);
             return Ok(false);
         }
 
@@ -117,7 +125,7 @@ impl TvTunesScraper {
                 format!("{BASE_URL}{download_url}")
             };
 
-            tracing::debug!("Attempting to download from: {}", full_url);
+            tracing::info!("[TelevisionTunes] Downloading from: {}", full_url);
 
             // Download the file
             let client = reqwest::Client::builder()
@@ -131,7 +139,11 @@ impl TvTunesScraper {
                 .await
                 .context("Failed to download audio file")?;
 
-            if !response.status().is_success() {
+            let status = response.status();
+            tracing::info!("[TelevisionTunes] Download response status: {}", status);
+
+            if !status.is_success() {
+                tracing::error!("[TelevisionTunes] Download failed with status: {}", status);
                 return Ok(false);
             }
 
@@ -142,9 +154,13 @@ impl TvTunesScraper {
                 .unwrap_or("")
                 .to_string();
 
+            tracing::info!("[TelevisionTunes] Content-Type: {}", content_type);
+
             let bytes = response.bytes()
                 .await
                 .context("Failed to read audio bytes")?;
+
+            tracing::info!("[TelevisionTunes] Downloaded {} bytes", bytes.len());
 
             // Determine if we need to convert based on content type or file signature
             let needs_conversion = content_type.contains("wav") || 
@@ -153,6 +169,7 @@ impl TvTunesScraper {
                                    (bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
 
             if needs_conversion {
+                tracing::info!("[TelevisionTunes] Converting WAV to MP3");
                 // Save to temporary WAV file
                 let temp_wav = output_path.with_extension("temp.wav");
                 let mut file = fs::File::create(&temp_wav).await
@@ -166,7 +183,9 @@ impl TvTunesScraper {
 
                 // Clean up temp file
                 let _ = fs::remove_file(&temp_wav).await;
+                tracing::info!("[TelevisionTunes] Conversion complete");
             } else {
+                tracing::info!("[TelevisionTunes] Saving directly as MP3");
                 // Save directly as MP3
                 let mut file = fs::File::create(output_path).await
                     .context("Failed to create output file")?;
@@ -174,8 +193,10 @@ impl TvTunesScraper {
                     .context("Failed to write output file")?;
             }
 
+            tracing::info!("[TelevisionTunes] Successfully downloaded to: {}", output_path.display());
             Ok(true)
         } else {
+            tracing::warn!("[TelevisionTunes] Download link has no href attribute");
             Ok(false)
         }
     }
@@ -184,8 +205,11 @@ impl TvTunesScraper {
 #[async_trait]
 impl ThemeScraper for TvTunesScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
+        tracing::info!("[TelevisionTunes] Starting search for: {}", show_name);
+        
         // Search for the show
         let Some(result_url) = self.search_show(show_name).await? else {
+            tracing::info!("[TelevisionTunes] No show found for: {}", show_name);
             return Ok(false);
         };
 

@@ -24,6 +24,8 @@ impl ThemesMoeScraper {
     }
 
     async fn search_anime(&self, show_name: &str) -> Result<Option<String>> {
+        tracing::info!("[Themes.moe] Starting search for: {}", show_name);
+        
         let browser_arc = self.browser.get().await?;
         let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
@@ -39,6 +41,7 @@ impl ThemesMoeScraper {
         ).await?;
 
         // Navigate to Themes.moe
+        tracing::info!("[Themes.moe] Navigating to: {}", BASE_URL);
         page.goto(BASE_URL)
             .await
             .context("Failed to navigate to Themes.moe")?
@@ -54,6 +57,7 @@ impl ThemesMoeScraper {
             .await;
 
         if let Ok(button) = mode_button {
+            tracing::info!("[Themes.moe] Clicking mode selector");
             button.click()
                 .await
                 .context("Failed to click mode selector")?;
@@ -65,6 +69,7 @@ impl ThemesMoeScraper {
                 .await;
             
             if let Ok(option) = anime_search_option {
+                tracing::info!("[Themes.moe] Selecting Anime Search mode");
                 option.click()
                     .await
                     .context("Failed to select Anime Search mode")?;
@@ -74,6 +79,7 @@ impl ThemesMoeScraper {
         }
 
         // Find search input
+        tracing::info!("[Themes.moe] Entering search query: {}", show_name);
         let search_input = page.find_element("input[type='search'], input[placeholder*='search'], input[role='combobox']")
             .await
             .context("Failed to find search input")?;
@@ -91,6 +97,7 @@ impl ThemesMoeScraper {
             .context("Failed to submit search")?;
 
         // Wait for results
+        tracing::info!("[Themes.moe] Waiting for search results");
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
         // Find OP theme links - they're direct .webm links in the table
@@ -98,8 +105,10 @@ impl ThemesMoeScraper {
             .await
             .unwrap_or_default();
 
+        tracing::info!("[Themes.moe] Found {} OP theme links", op_links.len());
+
         if op_links.is_empty() {
-            tracing::debug!("No OP themes found for: {}", show_name);
+            tracing::info!("[Themes.moe] No OP themes found for: {}", show_name);
             return Ok(None);
         }
 
@@ -110,15 +119,16 @@ impl ThemesMoeScraper {
             .context("Failed to get OP link href")?;
 
         if let Some(href) = href {
-            tracing::debug!("Found theme URL: {}", href);
+            tracing::info!("[Themes.moe] Found theme URL: {}", href);
             Ok(Some(href))
         } else {
+            tracing::warn!("[Themes.moe] First OP link has no href attribute");
             Ok(None)
         }
     }
 
     async fn download_media(&self, url: &str, output_path: &Path) -> Result<bool> {
-        tracing::debug!("Downloading media from: {}", url);
+        tracing::info!("[Themes.moe] Downloading media from: {}", url);
 
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
@@ -131,13 +141,19 @@ impl ThemesMoeScraper {
             .await
             .context("Failed to download media file")?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        tracing::info!("[Themes.moe] Download response status: {}", status);
+
+        if !status.is_success() {
+            tracing::error!("[Themes.moe] Download failed with status: {}", status);
             return Ok(false);
         }
 
         let bytes = response.bytes()
             .await
             .context("Failed to read media bytes")?;
+
+        tracing::info!("[Themes.moe] Downloaded {} bytes", bytes.len());
 
         // Save to temporary video file
         let temp_video = output_path.with_extension("temp.webm");
@@ -147,12 +163,14 @@ impl ThemesMoeScraper {
             .context("Failed to write temp video file")?;
 
         // Convert to MP3
+        tracing::info!("[Themes.moe] Converting to MP3");
         convert_audio(&temp_video, output_path, Config::AUDIO_BITRATE).await
             .context("Failed to convert video to MP3")?;
 
         // Clean up temp file
         let _ = fs::remove_file(&temp_video).await;
-
+        
+        tracing::info!("[Themes.moe] Successfully downloaded and converted theme");
         Ok(true)
     }
 }
@@ -160,7 +178,10 @@ impl ThemesMoeScraper {
 #[async_trait]
 impl ThemeScraper for ThemesMoeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
+        tracing::info!("[Themes.moe] Starting search for: {}", show_name);
+        
         let Some(media_url) = self.search_anime(show_name).await? else {
+            tracing::info!("[Themes.moe] No theme found for: {}", show_name);
             return Ok(false);
         };
 

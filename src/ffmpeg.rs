@@ -80,6 +80,9 @@ pub async fn convert_audio(
     output: &Path,
     bitrate: &str,
 ) -> Result<(), FfmpegError> {
+    tracing::info!("[FFmpeg] Converting {} to {}", input.display(), output.display());
+    tracing::info!("[FFmpeg] Using bitrate: {}", bitrate);
+    
     let timeout_duration = Duration::from_secs(Config::FFMPEG_TIMEOUT_SEC);
     
     let command_future = Command::new("ffmpeg")
@@ -101,10 +104,13 @@ pub async fn convert_audio(
     match result {
         Ok(Ok(output_result)) => {
             if output_result.status.success() {
+                tracing::info!("[FFmpeg] Conversion successful");
                 Ok(())
             } else {
                 let stderr = String::from_utf8_lossy(&output_result.stderr).to_string();
                 let error_type = FfmpegErrorParser::categorize_error(&stderr);
+                tracing::error!("[FFmpeg] Conversion failed: {:?}", error_type);
+                tracing::error!("[FFmpeg] stderr: {}", stderr);
                 Err(FfmpegError {
                     error_type,
                     message: format!("FFmpeg conversion failed with exit code: {:?}", output_result.status.code()),
@@ -113,6 +119,7 @@ pub async fn convert_audio(
             }
         }
         Ok(Err(e)) => {
+            tracing::error!("[FFmpeg] Failed to execute: {}", e);
             Err(FfmpegError {
                 error_type: FfmpegErrorType::Unknown,
                 message: format!("Failed to execute FFmpeg: {}", e),
@@ -120,6 +127,7 @@ pub async fn convert_audio(
             })
         }
         Err(_) => {
+            tracing::error!("[FFmpeg] Operation timed out after {} seconds", Config::FFMPEG_TIMEOUT_SEC);
             Err(FfmpegError {
                 error_type: FfmpegErrorType::Timeout,
                 message: format!("FFmpeg operation timed out after {} seconds", Config::FFMPEG_TIMEOUT_SEC),

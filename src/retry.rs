@@ -28,15 +28,20 @@ where
         attempt += 1;
         
         match operation().await {
-            Ok(result) => return Ok(result),
+            Ok(result) => {
+                if attempt > 1 {
+                    tracing::info!("[Retry] Operation succeeded on attempt {}", attempt);
+                }
+                return Ok(result);
+            }
             Err(e) => {
                 if attempt >= max_attempts {
+                    tracing::error!("[Retry] All {} attempts failed. Last error: {}", max_attempts, e);
                     return Err(e);
                 }
                 
-                // Log the retry attempt (in production, use tracing)
-                #[cfg(debug_assertions)]
-                eprintln!("Attempt {} failed: {}. Retrying in {}ms...", attempt, e, delay_ms);
+                tracing::warn!("[Retry] Attempt {}/{} failed: {}. Retrying in {}ms...", 
+                    attempt, max_attempts, e, delay_ms);
                 
                 // Wait before retrying
                 sleep(Duration::from_millis(delay_ms)).await;

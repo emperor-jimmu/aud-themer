@@ -44,6 +44,8 @@ impl YouTubeScraper {
     }
 
     async fn search_youtube(&self, query: &str) -> Result<Option<VideoInfo>> {
+        tracing::info!("[YouTube] Searching for: {}", query);
+        
         // Sanitize query for subprocess
         let safe_query = sanitize_for_subprocess(query, 200)
             .context("Failed to sanitize search query")?;
@@ -60,6 +62,8 @@ impl YouTubeScraper {
             .context("Failed to execute yt-dlp")?;
 
         if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::warn!("[YouTube] Search failed: {}", stderr);
             return Ok(None);
         }
 
@@ -69,11 +73,20 @@ impl YouTubeScraper {
         let video_info: VideoInfo = serde_json::from_str(&stdout)
             .context("Failed to parse yt-dlp JSON output")?;
 
+        if let Some(ref title) = video_info.title {
+            tracing::info!("[YouTube] Found video: {}", title);
+        }
+        if let Some(duration) = video_info.duration {
+            tracing::info!("[YouTube] Video duration: {:.1}s", duration);
+        }
+
         Ok(Some(video_info))
     }
 
     async fn download_audio(&self, video_id: &str, output_path: &Path) -> Result<()> {
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
+        
+        tracing::info!("[YouTube] Downloading audio from: {}", url);
         
         // Use yt-dlp to download and extract audio as MP3
         let output = Command::new("yt-dlp")
@@ -92,9 +105,11 @@ impl YouTubeScraper {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::error!("[YouTube] Download failed: {}", stderr);
             anyhow::bail!("yt-dlp download failed: {}", stderr);
         }
 
+        tracing::info!("[YouTube] Successfully downloaded to: {}", output_path.display());
         Ok(())
     }
 }
@@ -108,36 +123,56 @@ impl Default for YouTubeScraper {
 #[async_trait]
 impl ThemeScraper for YouTubeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
+        tracing::info!("[YouTube] Starting search for: {}", show_name);
+        
         let queries = Self::generate_search_queries(show_name);
+        tracing::info!("[YouTube] Generated {} search queries", queries.len());
 
-        for query in queries {
+        for (idx, query) in queries.iter().enumerate() {
+            tracing::info!("[YouTube] Trying query {}/{}: {}", idx + 1, queries.len(), query);
+            
             // Search for video
-            let video_info = match self.search_youtube(&query).await? {
+            let video_info = match self.search_youtube(query).await? {
                 Some(info) => info,
-                None => continue,
+                None => {
+                    tracing::info!("[YouTube] No results for query: {}", query);
+                    continue;
+                }
             };
 
             // Check duration
-            if let Some(duration) = video_info.duration
-                && !Self::is_duration_acceptable(duration)
-            {
-                continue; // Try next query
+            if let Some(duration) = video_info.duration {
+                if !Self::is_duration_acceptable(duration) {
+                    tracing::warn!("[YouTube] Video duration {:.1}s exceeds maximum {}s, skipping", 
+                        duration, Config::MAX_VIDEO_DURATION_SEC);
+                    continue; // Try next query
+                }
             }
 
             // Get video ID
             let video_id = match video_info.id {
                 Some(id) => id,
-                None => continue,
+                None => {
+                    tracing::warn!("[YouTube] Video info missing ID");
+                    continue;
+                }
             };
 
             // Download audio
             match self.download_audio(&video_id, output_path).await {
-                Ok(_) => return Ok(true),
-                Err(_) => continue, // Try next query
+                Ok(_) => {
+                    tracing::info!("[YouTube] Successfully downloaded theme");
+                    return Ok(true);
+                }
+                Err(e) => {
+                    tracing::error!("[YouTube] Download failed: {}", e);
+                    continue; // Try next query
+                }
             }
         }
 
         // All queries exhausted
+        tracing::info!("[YouTube] All search queries exhausted, no suitable video found");
         Ok(false)
     }
 

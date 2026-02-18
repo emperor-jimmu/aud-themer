@@ -130,6 +130,8 @@ impl Orchestrator {
 
     /// Scan directory and return list of show folders
     fn scan_directory(input_dir: &Path) -> Result<Vec<ShowFolder>> {
+        tracing::info!("Scanning directory: {}", input_dir.display());
+        
         let mut show_folders = Vec::new();
 
         let entries = fs::read_dir(input_dir)?;
@@ -138,6 +140,7 @@ impl Orchestrator {
             let entry = match entry {
                 Ok(e) => e,
                 Err(err) => {
+                    tracing::warn!("Failed to read directory entry: {}", err);
                     eprintln!("{} Failed to read directory entry: {}", "Warning:".yellow(), err);
                     continue;
                 }
@@ -158,6 +161,7 @@ impl Orchestrator {
 
             // Validate show name
             if !validate_show_name(&name) {
+                tracing::warn!("Skipping folder '{}': invalid or too long name", name);
                 eprintln!(
                     "{} Skipping folder '{}': invalid or too long name",
                     "Warning:".yellow(),
@@ -169,6 +173,8 @@ impl Orchestrator {
             // Strip year from name for search
             let search_name = strip_year_from_show_name(&name);
 
+            tracing::debug!("Found show folder: {} (search: {})", name, search_name);
+
             show_folders.push(ShowFolder {
                 path,
                 name,
@@ -176,11 +182,15 @@ impl Orchestrator {
             });
         }
 
+        tracing::info!("Found {} show folders", show_folders.len());
         Ok(show_folders)
     }
 
     /// Process a single show folder
     async fn process_show(&mut self, show_folder: &ShowFolder, folder_num: usize, total: usize) {
+        tracing::info!("Processing show {}/{}: {} (search name: {})", 
+            folder_num, total, show_folder.name, show_folder.search_name);
+        
         println!(
             "{} {}/{} - {}",
             "Processing".cyan().bold(),
@@ -193,8 +203,10 @@ impl Orchestrator {
         if let Some(existing_theme) = Self::check_existing_theme(&show_folder.path) {
             if self.config.force {
                 // Force mode: delete existing theme
+                tracing::info!("Force mode: deleting existing theme: {}", existing_theme);
                 println!("  {} Deleting existing theme: {}", "⚠".yellow(), existing_theme);
                 if let Err(err) = fs::remove_file(show_folder.path.join(&existing_theme)) {
+                    tracing::error!("Failed to delete existing theme: {}", err);
                     eprintln!(
                         "  {} Failed to delete existing theme: {}",
                         "Error:".red(),
@@ -204,6 +216,7 @@ impl Orchestrator {
                     return;
                 }
             } else {
+                tracing::info!("Skipping - already has theme: {}", existing_theme);
                 println!("  {} Already has theme: {}", "⊘".yellow(), existing_theme);
                 self.results.skipped += 1;
                 return;
@@ -212,6 +225,7 @@ impl Orchestrator {
 
         // Dry run mode
         if self.config.dry_run {
+            tracing::info!("Dry run mode - skipping actual download");
             println!("  {} Dry run - would search for theme", "ℹ".blue());
             return;
         }
@@ -220,6 +234,7 @@ impl Orchestrator {
         for scraper in &self.scrapers {
             let source_name = scraper.source_name();
 
+            tracing::info!("Attempting scraper: {}", source_name);
             println!("  {} Trying {}...", "→".cyan(), source_name);
 
             // Apply rate limiting
@@ -241,6 +256,7 @@ impl Orchestrator {
                     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                     
                     let file_size = get_file_size_formatted(&theme_path);
+                    tracing::info!("Successfully downloaded from {} ({})", source_name, file_size);
                     println!(
                         "  {} Downloaded from {} ({})",
                         "✓".green().bold(),
@@ -252,10 +268,12 @@ impl Orchestrator {
                 }
                 Ok(false) => {
                     // Not found at this source
+                    tracing::info!("Not found at {}", source_name);
                     println!("  {} Not found at {}", "✗".red(), source_name);
                 }
                 Err(err) => {
                     // Error occurred
+                    tracing::error!("Error with {}: {}", source_name, err);
                     eprintln!(
                         "  {} Error with {}: {}",
                         "✗".red(),
@@ -267,6 +285,7 @@ impl Orchestrator {
         }
 
         // All sources failed
+        tracing::warn!("Failed to find theme for: {}", show_folder.name);
         println!("  {} Failed to find theme", "✗".red().bold());
         self.results.failed += 1;
     }
