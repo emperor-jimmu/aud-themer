@@ -62,7 +62,9 @@ pub struct CliArgs {
 
 /// Check if a command is available in PATH
 fn check_dependency(command: &str) -> bool {
-    Command::new("which")
+    // Use `where` on Windows, `which` on Unix
+    let checker = if cfg!(target_os = "windows") { "where" } else { "which" };
+    Command::new(checker)
         .arg(command)
         .output()
         .map(|output| output.status.success())
