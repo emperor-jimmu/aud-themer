@@ -52,7 +52,7 @@ impl ThemesMoeScraper {
         // Wait for page to load
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-        // Click the mode selector button (MyAnimeList/AniList/Anime Search dropdown)
+        // Click the mode selector button to open dropdown
         let mode_button = page.find_element("button:has-text('MyAnimeList'), button:has-text('AniList'), button:has-text('Anime Search')")
             .await;
 
@@ -78,9 +78,9 @@ impl ThemesMoeScraper {
             }
         }
 
-        // Find search input
+        // Find search input (combobox)
         tracing::info!("[Themes.moe] Entering search query: {}", show_name);
-        let search_input = page.find_element("input[type='search'], input[placeholder*='search'], input[role='combobox']")
+        let search_input = page.find_element("input[type='search'], input[role='combobox'], input[placeholder*='search']")
             .await
             .context("Failed to find search input")?;
 
@@ -88,6 +88,7 @@ impl ThemesMoeScraper {
             .await
             .context("Failed to click search input")?;
 
+        // Clear any existing text and type the show name
         search_input.type_str(show_name)
             .await
             .context("Failed to type show name")?;
@@ -96,35 +97,57 @@ impl ThemesMoeScraper {
             .await
             .context("Failed to submit search")?;
 
-        // Wait for results
+        // Wait for results page to load
         tracing::info!("[Themes.moe] Waiting for search results");
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
-        // Find OP theme links - they're direct .webm links in the table
-        let op_links = page.find_elements("a[href*='.webm'][href*='OP']")
-            .await
-            .unwrap_or_default();
-
-        tracing::info!("[Themes.moe] Found {} OP theme links", op_links.len());
-
-        if op_links.is_empty() {
-            tracing::info!("[Themes.moe] No OP themes found for: {}", show_name);
+        // Check if we got "No anime found" message
+        let no_results = page.find_element("p:has-text('No anime found')")
+            .await;
+        
+        if no_results.is_ok() {
+            tracing::info!("[Themes.moe] No anime found for: {}", show_name);
             return Ok(None);
         }
 
-        // Get the first OP link
-        let first_op = &op_links[0];
-        let href = first_op.attribute("href")
+        // Look for OP theme links in the table
+        // The structure is: table > tbody > tr > td > a[href*='.webm']
+        // We want links that contain 'OP' in the text or href
+        let op_links = page.find_elements("table a[href*='.webm']")
             .await
-            .context("Failed to get OP link href")?;
+            .unwrap_or_default();
 
-        if let Some(href) = href {
-            tracing::info!("[Themes.moe] Found theme URL: {}", href);
-            Ok(Some(href))
-        } else {
-            tracing::warn!("[Themes.moe] First OP link has no href attribute");
-            Ok(None)
+        tracing::info!("[Themes.moe] Found {} theme links", op_links.len());
+
+        if op_links.is_empty() {
+            tracing::info!("[Themes.moe] No theme links found for: {}", show_name);
+            return Ok(None);
         }
+
+        // Find the first OP link (OP1, OP2, etc.)
+        for link in &op_links {
+            if let Ok(Some(text)) = link.inner_text().await {
+                if text.to_uppercase().starts_with("OP") {
+                    if let Ok(Some(href)) = link.attribute("href").await {
+                        tracing::info!("[Themes.moe] Found OP theme: {} -> {}", text, href);
+                        return Ok(Some(href));
+                    }
+                }
+            }
+        }
+
+        // If no OP found, try getting href from first link and check if it contains OP
+        if let Some(first_link) = op_links.first() {
+            if let Ok(Some(href)) = first_link.attribute("href").await {
+                if href.to_uppercase().contains("OP") {
+                    tracing::info!("[Themes.moe] Found OP theme URL: {}", href);
+                    return Ok(Some(href));
+                }
+            }
+        }
+
+        tracing::info!("[Themes.moe] No OP themes found for: {}", show_name);
+        Ok(None)
     }
 
     async fn download_media(&self, url: &str, output_path: &Path) -> Result<bool> {
@@ -133,6 +156,7 @@ impl ThemesMoeScraper {
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
+            .user_agent(Config::USER_AGENT)
             .build()
             .context("Failed to build HTTP client")?;
             

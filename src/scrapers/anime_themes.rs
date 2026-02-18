@@ -59,6 +59,7 @@ impl AnimeThemesScraper {
         Self {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
+                .user_agent(Config::USER_AGENT)
                 .build()
                 .expect("Failed to build HTTP client"),
         }

@@ -131,6 +131,7 @@ impl TvTunesScraper {
             let client = reqwest::Client::builder()
                 .danger_accept_invalid_certs(true)
                 .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
+                .user_agent(Config::USER_AGENT)
                 .build()
                 .context("Failed to build HTTP client")?;
                 

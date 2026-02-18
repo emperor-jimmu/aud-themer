@@ -37,4 +37,7 @@ impl Config {
     
     /// Valid theme file extensions
     pub const THEME_EXTENSIONS: &[&str] = &[".mp3", ".flac", ".wav"];
+    
+    /// User-Agent header for HTTP requests
+    pub const USER_AGENT: &str = "show-theme-cli/0.5.0 (https://github.com/show-theme-cli/show-theme-cli)";
 }
