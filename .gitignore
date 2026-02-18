@@ -6,9 +6,6 @@ Cargo.lock
 
 # Testing
 .hypothesis/
-.coverage
-htmlcov/
-*.cover
 
 # IDE
 .vscode/
