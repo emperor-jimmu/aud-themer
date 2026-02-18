@@ -1,5 +1,6 @@
 use clap::Parser;
 use colored::Colorize;
+use show_theme_cli::browser::SharedBrowser;
 use show_theme_cli::orchestrator::{Orchestrator, OrchestratorConfig};
 use show_theme_cli::scrapers::anime_themes::AnimeThemesScraper;
 use show_theme_cli::scrapers::themes_moe::ThemesMoeScraper;
@@ -87,11 +88,12 @@ fn init_logging(verbose: bool) {
     let log_level = if verbose { "debug" } else { "info" };
     
     // Filter out noisy chromiumoxide errors that don't affect functionality
+    // Set chromiumoxide modules to 'off' to completely suppress their logs
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| {
             EnvFilter::new(log_level)
-                .add_directive("chromiumoxide::conn=warn".parse().unwrap())
-                .add_directive("chromiumoxide::handler=warn".parse().unwrap())
+                .add_directive("chromiumoxide::conn=off".parse().unwrap())
+                .add_directive("chromiumoxide::handler=off".parse().unwrap())
         });
 
     // Create log file with timestamp
@@ -118,10 +120,11 @@ fn init_logging(verbose: bool) {
 
 /// Initialize all scrapers in priority order
 fn init_scrapers() -> Vec<Box<dyn ThemeScraper>> {
+    let shared_browser = SharedBrowser::new();
     let scrapers: Vec<Box<dyn ThemeScraper>> = vec![
-        Box::new(TvTunesScraper::new()),
+        Box::new(TvTunesScraper::new(shared_browser.clone())),
         Box::new(AnimeThemesScraper::new()),
-        Box::new(ThemesMoeScraper::new()),
+        Box::new(ThemesMoeScraper::new(shared_browser)),
         Box::new(YouTubeScraper::new()),
     ];
     scrapers

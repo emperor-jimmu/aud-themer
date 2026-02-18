@@ -1,14 +1,11 @@
 use async_trait::async_trait;
 use std::path::Path;
-use std::sync::Arc;
 use anyhow::{Result, Context};
-use chromiumoxide::browser::{Browser, BrowserConfig};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
-use futures::StreamExt;
 
 use super::ThemeScraper;
+use crate::browser::SharedBrowser;
 use crate::config::Config;
 use crate::ffmpeg::convert_audio;
 use crate::retry::retry_with_backoff;
@@ -16,54 +13,21 @@ use crate::retry::retry_with_backoff;
 const BASE_URL: &str = "https://themes.moe";
 
 pub struct ThemesMoeScraper {
-    browser: Arc<Mutex<Option<Browser>>>,
+    browser: SharedBrowser,
 }
 
 impl ThemesMoeScraper {
-    /// Create a new `ThemesMoeScraper` instance
+    /// Create a new `ThemesMoeScraper` with a shared browser instance
     #[must_use]
-    pub fn new() -> Self {
-        Self { 
-            browser: Arc::new(Mutex::new(None))
-        }
-    }
-
-    async fn ensure_browser(&self) -> Result<()> {
-        let mut browser_guard = self.browser.lock().await;
-        
-        if browser_guard.is_none() {
-            let (browser, mut handler) = Browser::launch(
-                BrowserConfig::builder()
-                    .arg("--ignore-certificate-errors")
-                    .arg("--ignore-ssl-errors")
-                    .arg("--disable-blink-features=AutomationControlled")
-                    .build()
-                    .map_err(|e| anyhow::anyhow!("Failed to build browser config: {e}"))?
-            )
-            .await
-            .context("Failed to launch browser")?;
-
-            // Spawn handler task that silently handles events and errors
-            tokio::spawn(async move {
-                while let Some(event) = handler.next().await {
-                    // Silently consume events - chromiumoxide sometimes has
-                    // deserialization issues with certain Chrome DevTools Protocol messages
-                    // that don't affect functionality
-                    drop(event);
-                }
-            });
-
-            *browser_guard = Some(browser);
-        }
-
-        Ok(())
+    pub fn new(browser: SharedBrowser) -> Self {
+        Self { browser }
     }
 
     async fn search_anime(&self, show_name: &str) -> Result<Option<String>> {
-        self.ensure_browser().await?;
-        let browser_guard = self.browser.lock().await;
+        let browser_arc = self.browser.get().await?;
+        let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
-        
+
         let page = retry_with_backoff(
             Config::MAX_RETRY_ATTEMPTS,
             Config::RETRY_BACKOFF_FACTOR,
@@ -154,10 +118,8 @@ impl ThemesMoeScraper {
     }
 
     async fn download_media(&self, url: &str, output_path: &Path) -> Result<bool> {
-        // The URL is a direct link to the .webm file, no need for browser
         tracing::debug!("Downloading media from: {}", url);
 
-        // Download the media file
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .timeout(std::time::Duration::from_secs(Config::DOWNLOAD_TIMEOUT_SEC))
@@ -195,21 +157,13 @@ impl ThemesMoeScraper {
     }
 }
 
-impl Default for ThemesMoeScraper {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[async_trait]
 impl ThemeScraper for ThemesMoeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path) -> Result<bool> {
-        // Search for the anime
         let Some(media_url) = self.search_anime(show_name).await? else {
             return Ok(false);
         };
 
-        // Download the media
         self.download_media(&media_url, output_path).await
     }
 

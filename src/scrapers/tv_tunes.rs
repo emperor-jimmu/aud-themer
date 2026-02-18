@@ -1,14 +1,11 @@
 use async_trait::async_trait;
 use std::path::Path;
-use std::sync::Arc;
 use anyhow::{Result, Context};
-use chromiumoxide::browser::{Browser, BrowserConfig};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
-use futures::StreamExt;
 
 use super::ThemeScraper;
+use crate::browser::SharedBrowser;
 use crate::config::Config;
 use crate::ffmpeg::convert_audio;
 use crate::retry::retry_with_backoff;
@@ -16,54 +13,21 @@ use crate::retry::retry_with_backoff;
 const BASE_URL: &str = "https://www.televisiontunes.com";
 
 pub struct TvTunesScraper {
-    browser: Arc<Mutex<Option<Browser>>>,
+    browser: SharedBrowser,
 }
 
 impl TvTunesScraper {
-    /// Create a new `TvTunesScraper` instance
+    /// Create a new `TvTunesScraper` with a shared browser instance
     #[must_use]
-    pub fn new() -> Self {
-        Self { 
-            browser: Arc::new(Mutex::new(None))
-        }
-    }
-
-    async fn ensure_browser(&self) -> Result<()> {
-        let mut browser_guard = self.browser.lock().await;
-        
-        if browser_guard.is_none() {
-            let (browser, mut handler) = Browser::launch(
-                BrowserConfig::builder()
-                    .arg("--ignore-certificate-errors")
-                    .arg("--ignore-ssl-errors")
-                    .arg("--disable-blink-features=AutomationControlled")
-                    .build()
-                    .map_err(|e| anyhow::anyhow!("Failed to build browser config: {e}"))?
-            )
-            .await
-            .context("Failed to launch browser")?;
-
-            // Spawn handler task that silently handles events and errors
-            tokio::spawn(async move {
-                while let Some(event) = handler.next().await {
-                    // Silently consume events - chromiumoxide sometimes has
-                    // deserialization issues with certain Chrome DevTools Protocol messages
-                    // that don't affect functionality
-                    drop(event);
-                }
-            });
-
-            *browser_guard = Some(browser);
-        }
-
-        Ok(())
+    pub fn new(browser: SharedBrowser) -> Self {
+        Self { browser }
     }
 
     async fn search_show(&self, show_name: &str) -> Result<Option<String>> {
-        self.ensure_browser().await?;
-        let browser_guard = self.browser.lock().await;
+        let browser_arc = self.browser.get().await?;
+        let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
-        
+
         let page = retry_with_backoff(
             Config::MAX_RETRY_ATTEMPTS,
             Config::RETRY_BACKOFF_FACTOR,
@@ -90,7 +54,6 @@ impl TvTunesScraper {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         // Find search result links - look for links in the search results area
-        // The results are in a specific container, look for links to .html pages
         let results = page.find_elements("a[href*='.html']")
             .await
             .unwrap_or_default();
@@ -119,8 +82,8 @@ impl TvTunesScraper {
     }
 
     async fn download_from_page(&self, url: &str, output_path: &Path) -> Result<bool> {
-        self.ensure_browser().await?;
-        let browser_guard = self.browser.lock().await;
+        let browser_arc = self.browser.get().await?;
+        let browser_guard = browser_arc.lock().await;
         let browser = browser_guard.as_ref().unwrap();
         let page = browser.new_page(url)
             .await
@@ -215,12 +178,6 @@ impl TvTunesScraper {
         } else {
             Ok(false)
         }
-    }
-}
-
-impl Default for TvTunesScraper {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

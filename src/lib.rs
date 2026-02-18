@@ -1,3 +1,4 @@
+pub mod browser;
 pub mod config;
 pub mod utils;
 pub mod scrapers;

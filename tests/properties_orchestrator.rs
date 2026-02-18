@@ -50,8 +50,9 @@ impl ThemeScraper for MockScraper {
         }
     }
 
-    fn source_name(&self) -> &str {
-        &self.name
+    fn source_name(&self) -> &'static str {
+        // Leak the string to get a 'static lifetime - acceptable in tests
+        Box::leak(self.name.clone().into_boxed_str())
     }
 }
 
