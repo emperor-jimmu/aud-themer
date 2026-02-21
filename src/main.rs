@@ -64,6 +64,14 @@ pub struct CliArgs {
     /// Directory for log files (default: current directory)
     #[arg(long, value_name = "LOG_DIR")]
     pub log_dir: Option<PathBuf>,
+
+    /// Browser to extract cookies from for yt-dlp [default: chrome]
+    #[arg(long, value_name = "BROWSER", default_value = "chrome")]
+    pub cookies_from_browser: String,
+
+    /// Disable passing cookies to yt-dlp
+    #[arg(long)]
+    pub no_cookies: bool,
 }
 
 /// Check if a command is available in PATH
@@ -171,7 +179,7 @@ fn init_logging(verbose: bool, log_dir: Option<PathBuf>) {
 }
 
 /// Initialize scrapers based on content mode
-fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBrowser>) {
+fn init_scrapers(mode: ContentMode, cookies_from_browser: Option<String>) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBrowser>) {
     let shared_browser = SharedBrowser::new();
 
     let scrapers: Vec<Box<dyn ThemeScraper>> = match mode {
@@ -179,7 +187,7 @@ fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBr
             // TV mode: TelevisionTunes + YouTube
             vec![
                 Box::new(TvTunesScraper::new(shared_browser.clone())),
-                Box::new(YouTubeScraper::new()),
+                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
             ]
         }
         ContentMode::Anime => {
@@ -187,13 +195,13 @@ fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBr
             vec![
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(AnimeThemesScraper::new()),
-                Box::new(YouTubeScraper::new()),
+                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
             ]
         }
         ContentMode::Youtube => {
             // YouTube-only mode: No other sources
             vec![
-                Box::new(YouTubeScraper::new()),
+                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
             ]
         }
         ContentMode::Both => {
@@ -202,7 +210,7 @@ fn init_scrapers(mode: ContentMode) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBr
                 Box::new(TvTunesScraper::new(shared_browser.clone())),
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(AnimeThemesScraper::new()),
-                Box::new(YouTubeScraper::new()),
+                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
             ]
         }
     };
@@ -282,7 +290,8 @@ async fn main() {
 
     // Initialize scrapers based on content mode
     info!("Initializing scrapers for mode: {:?}", args.mode);
-    let (scrapers, browsers) = init_scrapers(args.mode);
+    let cookies = if args.no_cookies { None } else { Some(args.cookies_from_browser) };
+    let (scrapers, browsers) = init_scrapers(args.mode, cookies);
 
     // Create orchestrator
     let mut orchestrator = Orchestrator::with_cancel_flag(config, scrapers, ctrlc_flag);

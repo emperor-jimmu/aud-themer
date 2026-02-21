@@ -1,46 +1,43 @@
-# Show Theme CLI
+# Audio Theme Downloader
 
 A command-line tool that automates theme song retrieval for TV shows and anime series. Scans local directory structures, identifies shows by folder name, and downloads high-quality theme songs from multiple prioritized sources.
 
 ## Features
 
 - **Automatic theme discovery**: Scans directories and downloads theme songs automatically
-- **Content mode selection**: Choose TV, Anime, or Both modes for optimized source usage
+- **Content mode selection**: Choose TV, Anime, YouTube-only, or Both modes
 - **Multiple sources**: Tries sources in priority order based on content type
-- **Smart fallback**: Automatically tries next source if one fails
+- **Smart fallback**: Automatically tries next source if one fails (waterfall pattern)
 - **Skip existing themes**: Won't re-download unless you use `--force`
-- **Rich console output**: Beautiful progress tracking with colored status indicators
-- **Audio format conversion**: Automatically converts to MP3 format
+- **YouTube cookie support**: Extracts browser cookies for yt-dlp by default (Chrome) to avoid bot detection
+- **Rich console output**: Progress tracking with colored status indicators
+- **Audio format conversion**: Automatically converts to high-quality MP3 (320kbps)
 - **Dry-run mode**: Test without downloading anything
 
 ## Requirements
 
-- **Python 3.12+**
+- **Rust** (2024 edition) — for building from source
 - **FFmpeg**: Required for audio extraction and format conversion
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `sudo apt install ffmpeg`
   - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+- **yt-dlp**: Required for YouTube downloads
+  - `pip install yt-dlp` or download from [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)
+- **Chromium** (optional): Used automatically by browser-based scrapers; downloaded on first use if not present
 
 ## Installation
 
-1. Clone or download this repository
-
-2. Install Python dependencies:
-
 ```bash
-pip install -r requirements.txt
-```
+# Clone the repository
+git clone <repo-url>
+cd audio-theme-downloader
 
-3. Install Playwright browsers:
+# Build
+cargo build --release
 
-```bash
-playwright install chromium
-```
-
-4. Verify FFmpeg is installed:
-
-```bash
+# Verify dependencies
 ffmpeg -version
+yt-dlp --version
 ```
 
 ## Usage
@@ -48,266 +45,157 @@ ffmpeg -version
 ### Basic Usage
 
 ```bash
-# Process both TV shows and anime (default)
-python main.py /path/to/shows
+# Process both TV shows and anime (default — all sources)
+cargo run --release -- /path/to/shows
 
 # Process TV shows only
-python main.py /path/to/tv_shows --mode tv
+cargo run --release -- /path/to/tv_shows --mode tv
 
 # Process anime only
-python main.py /path/to/anime --mode anime
-```
+cargo run --release -- /path/to/anime --mode anime
 
-This will scan the directory for subdirectories (each representing a show) and download theme songs to each folder as `theme.mp3`.
+# YouTube-only mode
+cargo run --release -- /path/to/shows --mode youtube
+```
 
 ### Command-Line Options
 
-```bash
-python main.py [OPTIONS] INPUT_DIR
+```
+audio-theme-downloader [OPTIONS] <INPUT_DIR>
 ```
 
-**Arguments:**
+| Option | Short | Description | Default |
+|---|---|---|---|
+| `<INPUT_DIR>` | | Root directory containing show folders | required |
+| `--mode` | `-m` | Content type: tv, anime, youtube, both | both |
+| `--force` | `-f` | Overwrite existing theme files | false |
+| `--verbose` | `-v` | Enable debug logging | false |
+| `--dry-run` | | Simulate without downloading | false |
+| `--timeout` | `-t` | Network timeout in seconds | 30 |
+| `--cookies-from-browser` | | Browser to extract YouTube cookies from | chrome |
+| `--no-cookies` | | Disable cookie extraction for yt-dlp | false |
+| `--log-dir` | | Directory for log files | current dir |
+| `--version` | | Show version and exit | |
+| `--help` | | Show help message | |
 
-- `INPUT_DIR`: Root directory containing show folders (required)
+### YouTube Cookie Authentication
 
-**Options:**
+YouTube requires authentication to avoid "Sign in to confirm you're not a bot" errors. By default, the tool extracts cookies from Chrome and passes them to yt-dlp.
 
-- `--mode`, `-m`: Content type - tv, anime, or both (default: both)
-- `--force`, `-f`: Overwrite existing theme files (default: False)
-- `--verbose`, `-v`: Enable debug logging (default: False)
-- `--dry-run`: Simulate operations without downloading (default: False)
-- `--timeout`, `-t`: Network timeout in seconds (default: 30)
-- `--version`: Show version and exit
-- `--help`: Show help message and exit
+```bash
+# Default behavior — uses Chrome cookies
+cargo run --release -- /path/to/shows
+
+# Use Firefox cookies instead
+cargo run --release -- /path/to/shows --cookies-from-browser firefox
+
+# Use Edge cookies
+cargo run --release -- /path/to/shows --cookies-from-browser edge
+
+# Other supported browsers: brave, opera, chromium, safari, vivaldi
+cargo run --release -- /path/to/shows --cookies-from-browser brave
+
+# Disable cookie extraction entirely (YouTube will likely fail)
+cargo run --release -- /path/to/shows --no-cookies
+```
+
+You must be logged into YouTube in the selected browser for this to work.
 
 ### Examples
 
-**Download themes for all shows (both TV and anime):**
-
 ```bash
-python main.py ~/Media/Shows
-```
+# Force re-download existing themes
+cargo run --release -- ~/Media/TV_Shows --force
 
-**Download themes for TV shows only:**
+# Dry run with verbose logging
+cargo run --release -- ~/Media/Shows --dry-run --verbose
 
-```bash
-python main.py ~/Media/TV_Shows --mode tv
-```
-
-**Download themes for anime only:**
-
-```bash
-python main.py ~/Media/Anime --mode anime
-```
-
-**Force re-download existing themes:**
-
-```bash
-python main.py ~/Media/TV_Shows --force
-```
-
-**Test without downloading (dry run):**
-
-```bash
-python main.py ~/Media/TV_Shows --dry-run
-```
-
-**Enable verbose logging:**
-
-```bash
-python main.py ~/Media/TV_Shows --verbose
-```
-
-**Combine options:**
-
-```bash
-python main.py ~/Media/Anime --mode anime --force --verbose
+# Anime mode with Firefox cookies and custom timeout
+cargo run --release -- ~/Media/Anime --mode anime --cookies-from-browser firefox --timeout 60
 ```
 
 ## Directory Structure
 
-The tool expects your media to be organized with one folder per show:
+The tool expects one folder per show:
 
 ```
-TV_Shows/
+Shows/
 ├── Breaking Bad/
 ├── The Office/
 ├── Attack on Titan/
 └── Cowboy Bebop/
 ```
 
-After running, theme files will be added in a `theme-music` subfolder:
+After running, each folder gets a `theme.mp3`:
 
 ```
-TV_Shows/
+Shows/
 ├── Breaking Bad/
-│   └── theme-music/
-│       └── theme.mp3
+│   └── theme.mp3
 ├── The Office/
-│   └── theme-music/
-│       └── theme.mp3
-├── Attack on Titan/
-│   └── theme-music/
-│       └── theme.mp3
-└── Cowboy Bebop/
-    └── theme-music/
-        └── theme.mp3
+│   └── theme.mp3
+└── ...
 ```
 
 ## Supported Sources
 
-The tool tries sources in priority order based on the selected mode:
+Sources are tried in waterfall order based on the selected mode:
 
-### TV Mode (`--mode tv`)
+| Mode | Source Order |
+|---|---|
+| `both` (default) | TelevisionTunes → Themes.moe → AnimeThemes → YouTube |
+| `tv` | TelevisionTunes → YouTube |
+| `anime` | Themes.moe → AnimeThemes → YouTube |
+| `youtube` | YouTube only |
 
-1. **TelevisionTunes** (televisiontunes.co.uk)
-   - Best for TV shows
-   - High-quality official themes
-   - Web scraping via Playwright
-
-2. **YouTube** (youtube.com)
-   - Fallback for any show
-   - Searches for "{Show Name} full theme song"
-   - Uses yt-dlp for downloads
-   - Minimum 192kbps audio quality
-
-### Anime Mode (`--mode anime`)
-
-1. **AnimeThemes** (animethemes.moe)
-   - Best for anime
-   - Official opening/ending themes
-   - REST API with video downloads
-   - Prefers OP1 > OP > ED
-
-2. **Themes.moe** (themes.moe)
-   - Additional anime source
-   - Web scraping via Playwright
-
-3. **YouTube** (youtube.com)
-   - Fallback for any show
-   - Searches for "{Show Name} full theme song"
-   - Uses yt-dlp for downloads
-   - Minimum 192kbps audio quality
-
-### Both Mode (`--mode both`, default)
-
-1. **TelevisionTunes** (televisiontunes.co.uk)
-2. **AnimeThemes** (animethemes.moe)
-3. **Themes.moe** (themes.moe)
-4. **YouTube** (youtube.com)
-
-## Output
-
-The tool provides real-time progress with colored status indicators:
-
-```
-Found 4 series folders
-
-Folder 1/4
-Processing: Breaking Bad
-  Trying TelevisionTunes... ✓
-SUCCESS Source: TelevisionTunes | File: /path/to/Breaking Bad/theme.mp3
-
-Folder 2/4
-SKIPPED The Office - File exists
-
-Folder 3/4
-Processing: Attack on Titan
-  Trying TelevisionTunes... ✗
-  Trying AnimeThemes... ✓
-SUCCESS Source: AnimeThemes | File: /path/to/Attack on Titan/theme.mp3
-
-Folder 4/4
-Processing: Unknown Show
-  Trying TelevisionTunes... ✗
-  Trying AnimeThemes... ✗
-  Trying Themes.moe... ✗
-  Trying YouTube... ✗
-FAILED No sources found for Unknown Show
-
-Processing Summary
-┏━━━━━━━━━┳━━━━━━━┓
-┃ Status  ┃ Count ┃
-┡━━━━━━━━━╇━━━━━━━┩
-│ Success │     2 │
-│ Skipped │     1 │
-│ Failed  │     1 │
-└─────────┴───────┘
-```
+- **TelevisionTunes** — Best for Western TV shows. Browser automation via chromiumoxide.
+- **AnimeThemes** (animethemes.moe) — REST API for anime OP/ED themes. Prefers OP1.
+- **Themes.moe** — Additional anime source. Browser automation via chromiumoxide.
+- **YouTube** — Fallback for anything. Uses yt-dlp with cookie authentication.
 
 ## File Validation
 
-Downloaded theme files are validated to ensure quality:
-
-- **Minimum file size**: 500KB (files smaller than this are rejected as corrupt)
-- **Format**: All themes are converted to MP3 format
-- **Bitrate**: 320kbps for high-quality sources, 192kbps minimum for YouTube
+- Minimum file size: 500KB (smaller files are rejected as corrupt)
+- Format: MP3 at 320kbps
+- Duration filter: YouTube results capped at 10 minutes
 
 ## Error Handling
 
-The tool handles errors gracefully:
-
-- **Network timeouts**: Retries up to 3 times with exponential backoff
-- **Missing sources**: Automatically tries next source
-- **Permission errors**: Skips folder with warning
-- **Single show failure**: Doesn't stop processing other shows
+- Network timeouts retry up to 3 times with exponential backoff
+- Missing sources automatically fall through to the next one
+- Single show failures don't stop processing of other shows
+- Ctrl+C gracefully finishes the current operation before exiting
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Run all tests
-pytest
+# Build
+cargo build
 
-# Run with verbose output
-pytest -v
+# Run tests
+cargo test
 
-# Run specific test categories
-pytest -m unit          # Unit tests only
-pytest -m property      # Property-based tests only
-pytest -m integration   # Integration tests only
+# Run property-based tests
+cargo test properties
 
-# Run with coverage
-pytest --cov=core --cov=scrapers
-```
+# Lint
+cargo clippy -- -D warnings
 
-### Code Quality
-
-```bash
-# Run pylint
-pylint core/ scrapers/ tests/
-
-# Run on specific module
-pylint core/orchestrator.py
+# Format
+cargo fmt
 ```
 
 ## Troubleshooting
 
+**"Sign in to confirm you're not a bot" from YouTube:**
+Make sure you're logged into YouTube in Chrome (or whichever browser you specify with `--cookies-from-browser`). If Chrome doesn't work, try `--cookies-from-browser edge` or `firefox`.
+
 **"FFmpeg not found" error:**
-
-- Install FFmpeg using your package manager (see Requirements section)
-- Verify installation: `ffmpeg -version`
-
-**"Playwright browsers not installed" error:**
-
-- Run: `playwright install chromium`
+Install FFmpeg and make sure it's on your PATH.
 
 **All sources failing:**
-
-- Check your internet connection
-- Try with `--verbose` flag to see detailed error messages
-- Some shows may have unusual names that don't match source databases
-
-**Permission errors:**
-
-- Ensure you have write permissions to the target directories
-- Try running with appropriate permissions
+Run with `--verbose` to see detailed logs. Check your internet connection. Some shows may have names that don't match source databases.
 
 ## License
 
 This project is provided as-is for personal use.
-
-## Contributing
-
-This tool was built using spec-driven development with property-based testing. See `.kiro/specs/show-theme-cli/` for detailed requirements, design, and implementation tasks.

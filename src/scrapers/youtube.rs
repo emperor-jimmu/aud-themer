@@ -15,13 +15,21 @@ struct VideoInfo {
     id: Option<String>,
 }
 
-pub struct YouTubeScraper;
+pub struct YouTubeScraper {
+    cookies_from_browser: Option<String>,
+}
 
 impl YouTubeScraper {
     /// Create a new `YouTubeScraper` instance
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self { cookies_from_browser: None }
+    }
+
+    /// Create a new `YouTubeScraper` with browser cookie extraction
+    #[must_use]
+    pub fn with_cookies_from_browser(browser: Option<String>) -> Self {
+        Self { cookies_from_browser: browser }
     }
 
     /// Generate search query variations for a show
@@ -51,11 +59,17 @@ impl YouTubeScraper {
             sanitize_for_subprocess(query, 200).context("Failed to sanitize search query")?;
 
         // Use yt-dlp to search and get video info
-        let output = Command::new("yt-dlp")
-            .arg("--dump-json")
+        let mut cmd = Command::new("yt-dlp");
+        cmd.arg("--dump-json")
             .arg("--skip-download")
             .arg("--default-search")
-            .arg("ytsearch1")
+            .arg("ytsearch1");
+
+        if let Some(ref browser) = self.cookies_from_browser {
+            cmd.arg("--cookies-from-browser").arg(browser);
+        }
+
+        let output = cmd
             .arg(&safe_query)
             .output()
             .await
@@ -89,12 +103,18 @@ impl YouTubeScraper {
         tracing::info!("[YouTube] Downloading audio from: {}", url);
 
         // Use yt-dlp to download and extract audio as MP3
-        let output = Command::new("yt-dlp")
-            .arg("--extract-audio")
+        let mut cmd = Command::new("yt-dlp");
+        cmd.arg("--extract-audio")
             .arg("--audio-format")
             .arg("mp3")
             .arg("--audio-quality")
-            .arg("0") // Best quality
+            .arg("0"); // Best quality
+
+        if let Some(ref browser) = self.cookies_from_browser {
+            cmd.arg("--cookies-from-browser").arg(browser);
+        }
+
+        let output = cmd
             .arg("--output")
             .arg(
                 output_path
@@ -123,7 +143,7 @@ impl YouTubeScraper {
 
 impl Default for YouTubeScraper {
     fn default() -> Self {
-        Self::new()
+        Self { cookies_from_browser: None }
     }
 }
 

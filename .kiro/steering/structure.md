@@ -200,6 +200,14 @@ Configuration constants used throughout the application:
 - **Solution**: Use Playwright MCP or browser DevTools to inspect current page structure
 - **Testing**: Verify selectors match actual DOM elements on live site
 
+### YouTube Bot Detection / "Sign in to confirm" Errors
+
+- **Cause**: YouTube requires authentication to serve search results and video streams
+- **Solution**: The tool passes `--cookies-from-browser chrome` to yt-dlp by default, extracting cookies from the user's Chrome session
+- **Override**: Use `--cookies-from-browser <browser>` to choose a different browser (firefox, edge, brave, opera, chromium, etc.)
+- **Disable**: Use `--no-cookies` to skip cookie extraction entirely (will likely fail on YouTube)
+- **Requirement**: The user must be logged into YouTube in the selected browser
+
 ### FFmpeg Conversion Errors
 
 - **Cause**: Corrupted downloads, unsupported formats, or FFmpeg not installed

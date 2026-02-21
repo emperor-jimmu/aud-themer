@@ -15,6 +15,7 @@ Key features:
 - Skip existing themes (with force override option)
 - Rich console output with progress tracking
 - Audio format conversion and validation using FFmpeg
+- Browser cookie extraction for YouTube authentication (via yt-dlp, defaults to Chrome)
 - Dry-run mode for testing
 - Single-binary distribution (no runtime dependencies except FFmpeg, Chromium, and yt-dlp)
 - Property-based testing for correctness guarantees

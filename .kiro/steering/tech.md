@@ -102,6 +102,8 @@
 - Generates multiple search queries with variations
 - Filters videos by duration (max 10 minutes)
 - Downloads audio-only format and converts to MP3
+- Passes `--cookies-from-browser` to yt-dlp by default (chrome) to avoid YouTube bot detection
+- Cookie browser is configurable via `--cookies-from-browser` CLI flag; disable with `--no-cookies`
 - Last resort when other sources fail
 
 ## Code Quality
@@ -183,6 +185,12 @@ cargo run -- /path/to/tv_shows --dry-run
 
 # Custom timeout
 cargo run -- /path/to/tv_shows --timeout 60
+
+# Use Firefox cookies for YouTube instead of Chrome (default)
+cargo run -- /path/to/tv_shows --cookies-from-browser firefox
+
+# Disable cookie extraction for yt-dlp
+cargo run -- /path/to/tv_shows --no-cookies
 
 # Show version
 cargo run -- --version
