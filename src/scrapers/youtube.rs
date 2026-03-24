@@ -6,6 +6,7 @@ use tokio::process::Command;
 
 use super::ThemeScraper;
 use crate::config::Config;
+use crate::utils::sanitize_show_name_for_search;
 use crate::utils::sanitize_for_subprocess;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -162,6 +163,7 @@ impl Default for YouTubeScraper {
 #[async_trait]
 impl ThemeScraper for YouTubeScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+        let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[YouTube] Starting search for: {}", show_name);
 
         let queries = Self::generate_search_queries(show_name);

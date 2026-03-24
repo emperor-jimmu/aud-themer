@@ -11,6 +11,7 @@ use super::ThemeScraper;
 use crate::config::{Config, USER_AGENT};
 use crate::ffmpeg::convert_audio;
 use crate::retry::retry_with_backoff;
+use crate::utils::sanitize_show_name_for_search;
 
 const API_BASE_URL: &str = "https://api.animethemes.moe";
 
@@ -221,6 +222,7 @@ impl Default for AnimeThemesScraper {
 #[async_trait]
 impl ThemeScraper for AnimeThemesScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+        let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[AnimeThemes] Starting search for: {}", show_name);
 
         // Search for anime

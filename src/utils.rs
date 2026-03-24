@@ -118,6 +118,16 @@ pub fn validate_output_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Remove characters that hurt search accuracy (exclamation marks, apostrophes)
+///
+/// For example, "It's Always Sunny!" becomes "Its Always Sunny"
+#[must_use]
+pub fn sanitize_show_name_for_search(name: &str) -> String {
+    name.chars()
+        .filter(|c| *c != '!' && *c != '\'')
+        .collect()
+}
+
 /// Strip year suffix from show name (e.g., "The Simpsons (1989)" -> "The Simpsons")
 #[must_use]
 pub fn strip_year_from_show_name(name: &str) -> String {

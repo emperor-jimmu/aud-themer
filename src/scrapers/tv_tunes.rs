@@ -10,6 +10,7 @@ use crate::browser::SharedBrowser;
 use crate::config::{Config, USER_AGENT};
 use crate::ffmpeg::convert_audio;
 use crate::retry::retry_with_backoff;
+use crate::utils::sanitize_show_name_for_search;
 
 const BASE_URL: &str = "https://www.televisiontunes.com";
 
@@ -229,6 +230,7 @@ impl TvTunesScraper {
 #[async_trait]
 impl ThemeScraper for TvTunesScraper {
     async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+        let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[TelevisionTunes] Starting search for: {}", show_name);
 
         // Search for the show
