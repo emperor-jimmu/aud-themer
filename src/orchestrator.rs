@@ -248,7 +248,7 @@ impl Orchestrator {
                     "⚠".yellow(),
                     existing_theme
                 );
-                if let Err(err) = fs::remove_file(show_folder.path.join(&existing_theme)) {
+                if let Err(err) = fs::remove_file(show_folder.path.join("theme-music").join(&existing_theme)) {
                     tracing::error!("Failed to delete existing theme: {}", err);
                     eprintln!(
                         "  {} Failed to delete existing theme: {}",
@@ -273,6 +273,17 @@ impl Orchestrator {
             tracing::info!("Attempting scraper: {}", source_name);
             println!("  {} Trying {}...", "→".cyan(), source_name);
 
+            // Ensure theme-music directory exists
+            let theme_dir = show_folder.path.join("theme-music");
+            if !self.config.dry_run {
+                if let Err(err) = fs::create_dir_all(&theme_dir) {
+                    tracing::error!("Failed to create theme-music directory: {}", err);
+                    eprintln!("  {} Failed to create theme-music directory: {}", "Error:".red(), err);
+                    self.results.failed += 1;
+                    return;
+                }
+            }
+
             // Apply rate limiting (skip in dry run to speed up)
             if !self.config.dry_run {
                 self.rate_limiter.wait_if_needed(source_name).await;
@@ -282,7 +293,7 @@ impl Orchestrator {
             match scraper
                 .search_and_download(
                     &show_folder.search_name,
-                    &show_folder.path.join("theme.mp3"),
+                    &show_folder.path.join("theme-music").join("theme.mp3"),
                     self.config.dry_run,
                 )
                 .await
@@ -296,21 +307,38 @@ impl Orchestrator {
                             "✓".green().bold(),
                             source_name.green()
                         );
-                    } else {
-                        let theme_path = show_folder.path.join("theme.mp3");
-                        let file_size = get_file_size_formatted(&theme_path);
-                        tracing::info!(
-                            "Successfully downloaded from {} ({})",
-                            source_name,
-                            file_size
-                        );
-                        println!(
-                            "  {} Downloaded from {} ({})",
-                            "✓".green().bold(),
-                            source_name.green(),
-                            file_size
-                        );
+                        self.results.success += 1;
+                        return;
                     }
+
+                    // Verify the file was actually written
+                    let theme_path = show_folder.path.join("theme-music").join("theme.mp3");
+                    if !theme_path.exists() {
+                        tracing::warn!(
+                            "{} claimed success but theme file not found at: {}",
+                            source_name,
+                            theme_path.display()
+                        );
+                        eprintln!(
+                            "  {} {} reported success but file not found, trying next source",
+                            "⚠".yellow(),
+                            source_name
+                        );
+                        continue;
+                    }
+
+                    let file_size = get_file_size_formatted(&theme_path);
+                    tracing::info!(
+                        "Successfully downloaded from {} ({})",
+                        source_name,
+                        file_size
+                    );
+                    println!(
+                        "  {} Downloaded from {} ({})",
+                        "✓".green().bold(),
+                        source_name.green(),
+                        file_size
+                    );
                     self.results.success += 1;
                     return;
                 }
@@ -337,7 +365,12 @@ impl Orchestrator {
     fn check_existing_theme(folder_path: &Path) -> Option<String> {
         for ext in Config::THEME_EXTENSIONS {
             let theme_file = format!("theme{ext}");
-            let theme_path = folder_path.join(&theme_file);
+            let theme_path = folder_path.join("theme-music").join(&theme_file);
+            tracing::debug!(
+                "Checking for existing theme: {} (exists={})",
+                theme_path.display(),
+                theme_path.exists()
+            );
             if theme_path.exists() {
                 return Some(theme_file);
             }

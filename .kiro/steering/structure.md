@@ -74,7 +74,7 @@ All user-facing output uses indicatif and colored crates for:
 
 ### Output Files
 
-- All theme files are saved as `theme.mp3` in each series folder
+- All theme files are saved as `theme.mp3` in a `theme-music/` subfolder within each series folder
 - Temporary files use `temp_*.webm` or `temp_*.wav` pattern (cleaned up after processing)
 
 ### Test Files

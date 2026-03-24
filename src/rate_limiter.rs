@@ -43,20 +43,15 @@ impl RateLimiter {
             if elapsed < min_delay {
                 // Need to wait for remaining time plus jitter
                 let remaining = min_delay.saturating_sub(elapsed);
-                let jitter_ms = {
-                    let mut rng = rand::thread_rng();
-                    rng.gen_range(0..=(self.max_delay_ms - self.min_delay_ms))
-                };
+                let jitter_ms = rand::rng().random_range(0..=(self.max_delay_ms - self.min_delay_ms));
                 remaining.as_millis() as u64 + jitter_ms
             } else {
                 // Enough time has passed, just add jitter
-                let mut rng = rand::thread_rng();
-                rng.gen_range(0..=(self.max_delay_ms - self.min_delay_ms))
+                rand::rng().random_range(0..=(self.max_delay_ms - self.min_delay_ms))
             }
         } else {
             // First request to this source, use random delay between min and max
-            let mut rng = rand::thread_rng();
-            rng.gen_range(self.min_delay_ms..=self.max_delay_ms)
+            rand::rng().random_range(self.min_delay_ms..=self.max_delay_ms)
         };
 
         // Wait for the calculated delay

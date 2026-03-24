@@ -53,86 +53,19 @@ impl ThemesMoeScraper {
         )
         .await?;
 
-        // Navigate to Themes.moe
-        tracing::info!("[Themes.moe] Navigating to: {}", BASE_URL);
-        page.goto(BASE_URL)
+        // Navigate directly to the search URL - bypasses the broken mode-switcher UI
+        let encoded = urlencoding::encode(show_name);
+        let search_url = format!("{}/list/search/{}", BASE_URL, encoded);
+        tracing::info!("[Themes.moe] Navigating to: {}", search_url);
+        page.goto(search_url.as_str())
             .await
-            .context("Failed to navigate to Themes.moe")?
+            .context("Failed to navigate to Themes.moe search")?
             .wait_for_navigation()
             .await
             .context("Failed to wait for navigation")?;
 
-        // Wait for page to load
+        // Wait for results to render
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-        // Click the mode selector button using JS (chromiumoxide doesn't support :has-text)
-        let _ = page
-            .evaluate_expression(
-                r#"
-                (function() {
-                    const buttons = document.querySelectorAll('button');
-                    for (const btn of buttons) {
-                        const text = btn.textContent.trim();
-                        if (text === 'MyAnimeList' || text === 'AniList' || text === 'Anime Search') {
-                            btn.click();
-                            return true;
-                        }
-                    }
-                    return false;
-                })()
-                "#,
-            )
-            .await;
-
-        tracing::info!("[Themes.moe] Clicked mode selector");
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Click "Anime Search" option from the dropdown
-        let _ = page
-            .evaluate_expression(
-                r#"
-                (function() {
-                    const items = document.querySelectorAll('li, li > div, li > span');
-                    for (const item of items) {
-                        if (item.textContent.trim() === 'Anime Search') {
-                            item.click();
-                            return true;
-                        }
-                    }
-                    return false;
-                })()
-                "#,
-            )
-            .await;
-
-        tracing::info!("[Themes.moe] Selected Anime Search mode");
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Find and interact with the search input
-        tracing::info!("[Themes.moe] Entering search query: {}", show_name);
-        let search_input = page
-            .find_element("input[role='combobox'], input[type='search'], input[placeholder]")
-            .await
-            .context("Failed to find search input")?;
-
-        search_input
-            .click()
-            .await
-            .context("Failed to click search input")?;
-
-        search_input
-            .type_str(show_name)
-            .await
-            .context("Failed to type show name")?;
-
-        search_input
-            .press_key("Enter")
-            .await
-            .context("Failed to submit search")?;
-
-        // Wait for results page to load
-        tracing::info!("[Themes.moe] Waiting for search results");
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
         // Check for "No anime found" or "No results" using JS
         let no_results: bool = page
