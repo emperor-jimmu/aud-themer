@@ -208,6 +208,14 @@ Configuration constants used throughout the application:
 - **Disable**: Use `--no-cookies` to skip cookie extraction entirely (will likely fail on YouTube)
 - **Requirement**: The user must be logged into YouTube in the selected browser
 
+### YouTube DPAPI Decryption Error ("Failed to decrypt with DPAPI")
+
+- **Cause**: yt-dlp cannot decrypt Chrome's cookie store because Chrome is running and has the cookies locked, or the Windows DPAPI context doesn't match
+- **Solution**: Close Chrome completely before running the tool, then retry
+- **Alternative**: Switch to a browser that isn't running: `--cookies-from-browser edge` or `--cookies-from-browser firefox`
+- **Disable**: Use `--no-cookies` to skip cookie extraction entirely (YouTube may still work without auth for some searches)
+- **Reference**: https://github.com/yt-dlp/yt-dlp/issues/10927
+
 ### FFmpeg Conversion Errors
 
 - **Cause**: Corrupted downloads, unsupported formats, or FFmpeg not installed

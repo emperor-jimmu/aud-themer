@@ -78,6 +78,18 @@ impl YouTubeScraper {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::warn!("[YouTube] Search failed: {}", stderr);
+
+            // DPAPI decryption failure — Chrome cookies are locked (Chrome may be running).
+            // Retrying other queries won't help, so bail early with a clear message.
+            if stderr.contains("Failed to decrypt with DPAPI") {
+                anyhow::bail!(
+                    "yt-dlp cannot decrypt Chrome cookies (DPAPI error). \
+                    Close Chrome and retry, or use --cookies-from-browser edge/firefox, \
+                    or disable cookies with --no-cookies. \
+                    See https://github.com/yt-dlp/yt-dlp/issues/10927"
+                );
+            }
+
             return Ok(None);
         }
 
