@@ -1,7 +1,7 @@
 // Feature: rust-rewrite, Property tests for utils module
 
-use proptest::prelude::*;
 use audio_theme_downloader::utils::*;
+use proptest::prelude::*;
 use std::fs::File;
 use std::io::Write;
 use tempfile::TempDir;

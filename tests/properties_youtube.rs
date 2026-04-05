@@ -1,9 +1,9 @@
 // Feature: rust-rewrite, Property 10: YouTube search query generation
 // Feature: rust-rewrite, Property 11: YouTube duration filtering
 
-use proptest::prelude::*;
 use audio_theme_downloader::config::Config;
 use audio_theme_downloader::scrapers::youtube::YouTubeScraper;
+use proptest::prelude::*;
 
 // Property 10: YouTube search query generation
 proptest! {

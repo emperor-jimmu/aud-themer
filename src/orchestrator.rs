@@ -248,7 +248,9 @@ impl Orchestrator {
                     "⚠".yellow(),
                     existing_theme
                 );
-                if let Err(err) = fs::remove_file(show_folder.path.join("theme-music").join(&existing_theme)) {
+                if let Err(err) =
+                    fs::remove_file(show_folder.path.join("theme-music").join(&existing_theme))
+                {
                     tracing::error!("Failed to delete existing theme: {}", err);
                     eprintln!(
                         "  {} Failed to delete existing theme: {}",
@@ -275,13 +277,15 @@ impl Orchestrator {
 
             // Ensure theme-music directory exists
             let theme_dir = show_folder.path.join("theme-music");
-            if !self.config.dry_run {
-                if let Err(err) = fs::create_dir_all(&theme_dir) {
-                    tracing::error!("Failed to create theme-music directory: {}", err);
-                    eprintln!("  {} Failed to create theme-music directory: {}", "Error:".red(), err);
-                    self.results.failed += 1;
-                    return;
-                }
+            if !self.config.dry_run && let Err(err) = fs::create_dir_all(&theme_dir) {
+                tracing::error!("Failed to create theme-music directory: {}", err);
+                eprintln!(
+                    "  {} Failed to create theme-music directory: {}",
+                    "Error:".red(),
+                    err
+                );
+                self.results.failed += 1;
+                return;
             }
 
             // Apply rate limiting (skip in dry run to speed up)

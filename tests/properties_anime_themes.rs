@@ -1,8 +1,8 @@
 // Feature: rust-rewrite, Property 8: Best match selection by string similarity
 // Feature: rust-rewrite, Property 9: Theme type priority selection
 
-use proptest::prelude::*;
 use audio_theme_downloader::scrapers::anime_themes::{Anime, AnimeTheme, AnimeThemesScraper};
+use proptest::prelude::*;
 
 // Property 8: Best match selection by string similarity
 proptest! {

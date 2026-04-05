@@ -27,7 +27,9 @@ impl ThemesMoeScraper {
         let client = Client::builder()
             .danger_accept_invalid_certs(true)
             .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
-            .timeout(std::time::Duration::from_secs(Config::CDN_DOWNLOAD_TIMEOUT_SEC))
+            .timeout(std::time::Duration::from_secs(
+                Config::CDN_DOWNLOAD_TIMEOUT_SEC,
+            ))
             .user_agent(USER_AGENT.as_str())
             .build()
             .expect("Failed to build HTTP client");
@@ -180,7 +182,12 @@ impl ThemesMoeScraper {
 
 #[async_trait]
 impl ThemeScraper for ThemesMoeScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+    async fn search_and_download(
+        &self,
+        show_name: &str,
+        output_path: &Path,
+        dry_run: bool,
+    ) -> Result<bool> {
         let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[Themes.moe] Starting search for: {}", show_name);
 

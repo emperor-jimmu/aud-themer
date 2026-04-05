@@ -43,27 +43,27 @@ impl SharedBrowser {
 
         if guard.is_none() {
             tracing::info!("Launching browser instance...");
-            
+
             // Try to find/download Chromium
             let chrome_path = Self::ensure_chromium().await?;
-            
+
             // Create a unique temporary user data dir per process to avoid
             // collisions with any running Chrome instance (exit status 21 on Windows).
-            let temp_user_data = std::env::temp_dir()
-                .join(format!(
-                    "audio-theme-downloader-chrome-{}-{}",
-                    std::process::id(),
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                ));
+            let temp_user_data = std::env::temp_dir().join(format!(
+                "audio-theme-downloader-chrome-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+            ));
             if !temp_user_data.exists() {
-                std::fs::create_dir_all(&temp_user_data)
-                    .map_err(|e| anyhow::anyhow!("Failed to create temp Chrome profile dir: {e}"))?;
+                std::fs::create_dir_all(&temp_user_data).map_err(|e| {
+                    anyhow::anyhow!("Failed to create temp Chrome profile dir: {e}")
+                })?;
             }
             tracing::info!("Using temp Chrome profile: {}", temp_user_data.display());
-            
+
             let mut config_builder = BrowserConfig::builder()
                 .user_data_dir(&temp_user_data)
                 .new_headless_mode()
@@ -75,22 +75,20 @@ impl SharedBrowser {
                 .arg("--disable-sync")
                 .arg("--no-first-run")
                 .arg("--mute-audio");
-            
+
             if let Some(path) = chrome_path {
                 tracing::info!("Using Chrome at: {}", path.display());
                 config_builder = config_builder.chrome_executable(path);
             }
-            
+
             let config = config_builder
                 .build()
                 .map_err(|e| anyhow::anyhow!("Failed to build browser config: {e}"))?;
 
-            let (browser, mut handler) = Browser::launch(config)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Browser launch failed: {}", e);
-                    anyhow::anyhow!("Failed to launch browser: {e}")
-                })?;
+            let (browser, mut handler) = Browser::launch(config).await.map_err(|e| {
+                tracing::error!("Browser launch failed: {}", e);
+                anyhow::anyhow!("Failed to launch browser: {e}")
+            })?;
 
             tracing::info!("Browser launched successfully");
 
@@ -107,17 +105,17 @@ impl SharedBrowser {
         drop(guard);
         Ok(Arc::clone(&self.browser))
     }
-    
+
     /// Ensure Chromium is available, downloading if necessary
     async fn ensure_chromium() -> Result<Option<PathBuf>> {
         // Strategy: Try system Chrome first, then local .chromium, then download
-        
+
         // 1. Check if system Chrome/Chromium exists
         if let Some(system_chrome) = Self::find_system_chrome() {
             tracing::info!("Found system Chrome at: {}", system_chrome.display());
             return Ok(Some(system_chrome));
         }
-        
+
         // 2. Check for already-downloaded Chromium next to the executable
         //    (handles running from target/release or installed location)
         let exe_chromium = Self::find_local_chromium();
@@ -125,39 +123,46 @@ impl SharedBrowser {
             tracing::info!("Found local Chromium at: {}", local_chrome.display());
             return Ok(Some(local_chrome));
         }
-        
+
         tracing::info!("No system or local Chrome found, attempting to download Chromium...");
-        
+
         // 3. Download as fallback
         let download_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join(".chromium")))
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join(".chromium"));
-        
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .unwrap_or_default()
+                    .join(".chromium")
+            });
+
         // Create download directory if it doesn't exist
         if !download_dir.exists() {
             tokio::fs::create_dir_all(&download_dir).await?;
         }
-        
+
         let fetcher = BrowserFetcher::new(
             BrowserFetcherOptions::builder()
                 .with_path(&download_dir)
                 .build()
                 .map_err(|e| anyhow::anyhow!("Failed to create browser fetcher: {e}"))?,
         );
-        
+
         match fetcher.fetch().await {
             Ok(info) => {
                 tracing::info!("Chromium available at: {}", info.executable_path.display());
                 Ok(Some(info.executable_path))
             }
             Err(e) => {
-                tracing::warn!("Failed to fetch Chromium: {}. Browser automation will be unavailable.", e);
+                tracing::warn!(
+                    "Failed to fetch Chromium: {}. Browser automation will be unavailable.",
+                    e
+                );
                 Ok(None)
             }
         }
     }
-    
+
     /// Look for a previously-downloaded Chromium in .chromium directories
     /// relative to the executable or the current working directory.
     fn find_local_chromium() -> Option<PathBuf> {
@@ -176,7 +181,7 @@ impl SharedBrowser {
         .into_iter()
         .flatten()
         .collect();
-        
+
         for dir in candidate_dirs {
             if !dir.exists() {
                 continue;
@@ -213,42 +218,47 @@ impl SharedBrowser {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Try to find system-installed Chrome/Chromium
     fn find_system_chrome() -> Option<PathBuf> {
         // Common Chrome/Chromium installation paths on Windows
         let possible_paths = vec![
             // Chrome stable
-            std::env::var("PROGRAMFILES").ok()
+            std::env::var("PROGRAMFILES")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
-            std::env::var("PROGRAMFILES(X86)").ok()
+            std::env::var("PROGRAMFILES(X86)")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
-            std::env::var("LOCALAPPDATA").ok()
+            std::env::var("LOCALAPPDATA")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
-            
             // Chromium
-            std::env::var("PROGRAMFILES").ok()
+            std::env::var("PROGRAMFILES")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Chromium\\Application\\chrome.exe")),
-            std::env::var("LOCALAPPDATA").ok()
+            std::env::var("LOCALAPPDATA")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Chromium\\Application\\chrome.exe")),
-            
             // Edge (Chromium-based)
-            std::env::var("PROGRAMFILES(X86)").ok()
+            std::env::var("PROGRAMFILES(X86)")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
-            std::env::var("PROGRAMFILES").ok()
+            std::env::var("PROGRAMFILES")
+                .ok()
                 .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
         ];
-        
+
         for path in possible_paths.into_iter().flatten() {
             if path.exists() {
                 tracing::debug!("Found Chrome at: {}", path.display());
                 return Some(path);
             }
         }
-        
+
         tracing::debug!("No system Chrome installation found");
         None
     }

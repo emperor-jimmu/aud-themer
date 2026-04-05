@@ -229,7 +229,12 @@ impl TvTunesScraper {
 
 #[async_trait]
 impl ThemeScraper for TvTunesScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+    async fn search_and_download(
+        &self,
+        show_name: &str,
+        output_path: &Path,
+        dry_run: bool,
+    ) -> Result<bool> {
         let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[TelevisionTunes] Starting search for: {}", show_name);
 
@@ -240,7 +245,10 @@ impl ThemeScraper for TvTunesScraper {
         };
 
         if dry_run {
-            tracing::info!("[TelevisionTunes] Dry run - would download from: {}", result_url);
+            tracing::info!(
+                "[TelevisionTunes] Dry run - would download from: {}",
+                result_url
+            );
             return Ok(true);
         }
 

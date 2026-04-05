@@ -5,8 +5,8 @@
 //
 // Validates: Requirements 1.8
 
-use proptest::prelude::*;
 use audio_theme_downloader::validate_input_path;
+use proptest::prelude::*;
 use std::path::PathBuf;
 
 proptest! {

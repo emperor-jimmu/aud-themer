@@ -6,8 +6,8 @@ use tokio::process::Command;
 
 use super::ThemeScraper;
 use crate::config::Config;
-use crate::utils::sanitize_show_name_for_search;
 use crate::utils::sanitize_for_subprocess;
+use crate::utils::sanitize_show_name_for_search;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct VideoInfo {
@@ -16,6 +16,7 @@ struct VideoInfo {
     id: Option<String>,
 }
 
+#[derive(Default)]
 pub struct YouTubeScraper {
     cookies_from_browser: Option<String>,
 }
@@ -24,13 +25,17 @@ impl YouTubeScraper {
     /// Create a new `YouTubeScraper` instance
     #[must_use]
     pub fn new() -> Self {
-        Self { cookies_from_browser: None }
+        Self {
+            cookies_from_browser: None,
+        }
     }
 
     /// Create a new `YouTubeScraper` with browser cookie extraction
     #[must_use]
     pub fn with_cookies_from_browser(browser: Option<String>) -> Self {
-        Self { cookies_from_browser: browser }
+        Self {
+            cookies_from_browser: browser,
+        }
     }
 
     /// Generate search query variations for a show
@@ -127,18 +132,17 @@ impl YouTubeScraper {
             cmd.arg("--cookies-from-browser").arg(browser);
         }
 
-        let output = cmd
-            .arg("--output")
-            .arg(
-                output_path
-                    .with_extension("")
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid output path: non-UTF-8 characters"))?,
-            )
-            .arg(&url)
-            .output()
-            .await
-            .context("Failed to execute yt-dlp for download")?;
+        let output =
+            cmd.arg("--output")
+                .arg(
+                    output_path.with_extension("").to_str().ok_or_else(|| {
+                        anyhow::anyhow!("Invalid output path: non-UTF-8 characters")
+                    })?,
+                )
+                .arg(&url)
+                .output()
+                .await
+                .context("Failed to execute yt-dlp for download")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -154,15 +158,14 @@ impl YouTubeScraper {
     }
 }
 
-impl Default for YouTubeScraper {
-    fn default() -> Self {
-        Self { cookies_from_browser: None }
-    }
-}
-
 #[async_trait]
 impl ThemeScraper for YouTubeScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+    async fn search_and_download(
+        &self,
+        show_name: &str,
+        output_path: &Path,
+        dry_run: bool,
+    ) -> Result<bool> {
         let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[YouTube] Starting search for: {}", show_name);
 

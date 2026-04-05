@@ -1,5 +1,3 @@
-use clap::Parser;
-use colored::Colorize;
 use audio_theme_downloader::browser::SharedBrowser;
 use audio_theme_downloader::orchestrator::{Orchestrator, OrchestratorConfig};
 use audio_theme_downloader::scrapers::ThemeScraper;
@@ -8,6 +6,8 @@ use audio_theme_downloader::scrapers::themes_moe::ThemesMoeScraper;
 use audio_theme_downloader::scrapers::tv_tunes::TvTunesScraper;
 use audio_theme_downloader::scrapers::youtube::YouTubeScraper;
 use audio_theme_downloader::validate_input_path;
+use clap::Parser;
+use colored::Colorize;
 use std::path::PathBuf;
 use std::process::{self, Command};
 use std::time::Instant;
@@ -77,7 +77,11 @@ pub struct CliArgs {
 /// Check if a command is available in PATH
 fn check_dependency(command: &str) -> bool {
     // Use `where` on Windows, `which` on Unix
-    let checker = if cfg!(target_os = "windows") { "where" } else { "which" };
+    let checker = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
     Command::new(checker)
         .arg(command)
         .output()
@@ -127,8 +131,7 @@ fn init_logging(verbose: bool, log_dir: Option<PathBuf>) {
 
     // Filter out noisy chromiumoxide logs completely
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new(log_level)
-            .add_directive("chromiumoxide=off".parse().unwrap())
+        EnvFilter::new(log_level).add_directive("chromiumoxide=off".parse().unwrap())
     });
 
     // Determine log directory
@@ -172,14 +175,16 @@ fn init_logging(verbose: bool, log_dir: Option<PathBuf>) {
         .with_ansi(false)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Failed to set tracing subscriber");
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 
     println!("{} Logging to {}", "ℹ".blue(), log_path.display());
 }
 
 /// Initialize scrapers based on content mode
-fn init_scrapers(mode: ContentMode, cookies_from_browser: Option<String>) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBrowser>) {
+fn init_scrapers(
+    mode: ContentMode,
+    cookies_from_browser: Option<String>,
+) -> (Vec<Box<dyn ThemeScraper>>, Vec<SharedBrowser>) {
     let shared_browser = SharedBrowser::new();
 
     let scrapers: Vec<Box<dyn ThemeScraper>> = match mode {
@@ -187,7 +192,9 @@ fn init_scrapers(mode: ContentMode, cookies_from_browser: Option<String>) -> (Ve
             // TV mode: TelevisionTunes + YouTube
             vec![
                 Box::new(TvTunesScraper::new(shared_browser.clone())),
-                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
+                Box::new(YouTubeScraper::with_cookies_from_browser(
+                    cookies_from_browser,
+                )),
             ]
         }
         ContentMode::Anime => {
@@ -195,14 +202,16 @@ fn init_scrapers(mode: ContentMode, cookies_from_browser: Option<String>) -> (Ve
             vec![
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(AnimeThemesScraper::new()),
-                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
+                Box::new(YouTubeScraper::with_cookies_from_browser(
+                    cookies_from_browser,
+                )),
             ]
         }
         ContentMode::Youtube => {
             // YouTube-only mode: No other sources
-            vec![
-                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
-            ]
+            vec![Box::new(YouTubeScraper::with_cookies_from_browser(
+                cookies_from_browser,
+            ))]
         }
         ContentMode::Both => {
             // Both mode: All sources
@@ -210,7 +219,9 @@ fn init_scrapers(mode: ContentMode, cookies_from_browser: Option<String>) -> (Ve
                 Box::new(TvTunesScraper::new(shared_browser.clone())),
                 Box::new(ThemesMoeScraper::new(shared_browser.clone())),
                 Box::new(AnimeThemesScraper::new()),
-                Box::new(YouTubeScraper::with_cookies_from_browser(cookies_from_browser)),
+                Box::new(YouTubeScraper::with_cookies_from_browser(
+                    cookies_from_browser,
+                )),
             ]
         }
     };
@@ -251,7 +262,10 @@ async fn main() {
 
     // Initialize logging
     init_logging(args.verbose, args.log_dir.clone());
-    info!("Audio Theme Downloader v{} starting", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Audio Theme Downloader v{} starting",
+        env!("CARGO_PKG_VERSION")
+    );
     info!("Input directory: {}", input_dir.display());
 
     // Set up Ctrl+C handler that flushes logs before exiting
@@ -290,7 +304,11 @@ async fn main() {
 
     // Initialize scrapers based on content mode
     info!("Initializing scrapers for mode: {:?}", args.mode);
-    let cookies = if args.no_cookies { None } else { Some(args.cookies_from_browser) };
+    let cookies = if args.no_cookies {
+        None
+    } else {
+        Some(args.cookies_from_browser)
+    };
     let (scrapers, browsers) = init_scrapers(args.mode, cookies);
 
     // Create orchestrator
@@ -330,12 +348,12 @@ async fn main() {
         Err(err) => {
             error!("Critical error: {}", err);
             eprintln!("\n{} {}", "Error:".red().bold(), err);
-            
+
             // Clean up browser instances even on error
             for browser in browsers {
                 let _ = browser.close().await;
             }
-            
+
             process::exit(1);
         }
     }

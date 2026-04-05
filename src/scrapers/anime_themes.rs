@@ -65,7 +65,9 @@ impl AnimeThemesScraper {
             // The CDN can stall connections; 3 minutes is enough for a ~10MB webm file.
             download_client: Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
-                .timeout(std::time::Duration::from_secs(Config::CDN_DOWNLOAD_TIMEOUT_SEC))
+                .timeout(std::time::Duration::from_secs(
+                    Config::CDN_DOWNLOAD_TIMEOUT_SEC,
+                ))
                 .user_agent(USER_AGENT.as_str())
                 .build()
                 .expect("Failed to build download HTTP client"),
@@ -221,7 +223,12 @@ impl Default for AnimeThemesScraper {
 
 #[async_trait]
 impl ThemeScraper for AnimeThemesScraper {
-    async fn search_and_download(&self, show_name: &str, output_path: &Path, dry_run: bool) -> Result<bool> {
+    async fn search_and_download(
+        &self,
+        show_name: &str,
+        output_path: &Path,
+        dry_run: bool,
+    ) -> Result<bool> {
         let show_name = &sanitize_show_name_for_search(show_name);
         tracing::info!("[AnimeThemes] Starting search for: {}", show_name);
 

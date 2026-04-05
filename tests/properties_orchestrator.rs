@@ -2,9 +2,9 @@
 // Property tests for orchestrator module
 
 use async_trait::async_trait;
-use proptest::prelude::*;
 use audio_theme_downloader::orchestrator::{Orchestrator, OrchestratorConfig};
 use audio_theme_downloader::scrapers::ThemeScraper;
+use proptest::prelude::*;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
