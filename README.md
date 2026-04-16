@@ -13,6 +13,7 @@ A command-line tool that automates theme song retrieval for TV shows and anime s
 - **Rich console output**: Progress tracking with colored status indicators
 - **Audio format conversion**: Automatically converts to high-quality MP3 (320kbps)
 - **Dry-run mode**: Test without downloading anything
+- **File validation**: Validates file size (min 500KB) and supports MP3, FLAC, WAV formats
 
 ## Requirements
 
@@ -72,9 +73,9 @@ audio-theme-downloader [OPTIONS] <INPUT_DIR>
 | `--verbose` | `-v` | Enable debug logging | false |
 | `--dry-run` | | Simulate without downloading | false |
 | `--timeout` | `-t` | Network timeout in seconds | 30 |
+| `--log-dir` | | Directory for log files | current dir |
 | `--cookies-from-browser` | | Browser to extract YouTube cookies from | chrome |
 | `--no-cookies` | | Disable cookie extraction for yt-dlp | false |
-| `--log-dir` | | Directory for log files | current dir |
 | `--version` | | Show version and exit | |
 | `--help` | | Show help message | |
 
@@ -126,14 +127,16 @@ Shows/
 └── Cowboy Bebop/
 ```
 
-After running, each folder gets a `theme.mp3`:
+After running, each folder gets a `theme-music` subfolder containing the theme file:
 
 ```
 Shows/
 ├── Breaking Bad/
-│   └── theme.mp3
+│   └── theme-music/
+│       └── theme.mp3
 ├── The Office/
-│   └── theme.mp3
+│   └── theme-music/
+│       └── theme.mp3
 └── ...
 ```
 
@@ -156,12 +159,13 @@ Sources are tried in waterfall order based on the selected mode:
 ## File Validation
 
 - Minimum file size: 500KB (smaller files are rejected as corrupt)
-- Format: MP3 at 320kbps
+- Format: MP3, FLAC, or WAV (converted to MP3 320kbps)
 - Duration filter: YouTube results capped at 10 minutes
 
 ## Error Handling
 
 - Network timeouts retry up to 3 times with exponential backoff
+- Built-in rate limiting (1-3 second delay between requests) to avoid source blocking
 - Missing sources automatically fall through to the next one
 - Single show failures don't stop processing of other shows
 - Ctrl+C gracefully finishes the current operation before exiting
