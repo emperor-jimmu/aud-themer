@@ -25,10 +25,6 @@ impl MockScraper {
             call_count: Arc::new(Mutex::new(0)),
         }
     }
-
-    fn get_call_count(&self) -> usize {
-        *self.call_count.lock().unwrap()
-    }
 }
 
 #[async_trait]
@@ -90,9 +86,10 @@ async fn property_4_existing_theme_detection_skip() {
     let temp_dir = TempDir::new().unwrap();
     let show_folder = temp_dir.path().join("TestShow");
     fs::create_dir(&show_folder).unwrap();
+    fs::create_dir(show_folder.join("theme-music")).unwrap();
 
-    // Create existing theme file
-    fs::write(show_folder.join("theme.mp3"), b"existing theme").unwrap();
+    // Create existing theme file in correct location
+    fs::write(show_folder.join("theme-music").join("theme.mp3"), b"existing theme").unwrap();
 
     // Create orchestrator with force=false and NO scrapers (to avoid rate limiter delays)
     let config = OrchestratorConfig {
@@ -124,8 +121,9 @@ async fn property_5_force_mode_deletes_existing() {
     let temp_dir = TempDir::new().unwrap();
     let show_folder = temp_dir.path().join("TestShow");
     fs::create_dir(&show_folder).unwrap();
+    fs::create_dir(show_folder.join("theme-music")).unwrap();
 
-    let theme_path = show_folder.join("theme.mp3");
+    let theme_path = show_folder.join("theme-music").join("theme.mp3");
     fs::write(&theme_path, b"old theme").unwrap();
 
     // Verify file exists
@@ -194,15 +192,17 @@ async fn property_6_scraper_chain_short_circuit_case_1() {
 // Property 6: Scraper chain short-circuits on success (case 2)
 #[tokio::test]
 async fn property_6_scraper_chain_short_circuit_case_2() {
-    // Test case: second scraper succeeds
     let temp_dir = TempDir::new().unwrap();
     let show_folder = temp_dir.path().join("TestShow");
     fs::create_dir(&show_folder).unwrap();
 
+    let should_succeed = Arc::new(Mutex::new(false));
+    let call_count_1 = Arc::new(Mutex::new(0usize));
+    let call_count_2 = Arc::new(Mutex::new(0usize));
+
     let scrapers: Vec<Box<dyn ThemeScraper>> = vec![
-        Box::new(MockScraper::new("Scraper1", false)),
-        Box::new(MockScraper::new("Scraper2", true)),
-        Box::new(MockScraper::new("Scraper3", false)),
+        Box::new(TestScraper::new("Scraper1", should_succeed.clone(), call_count_1.clone())),
+        Box::new(TestScraper::new("Scraper2", Arc::new(Mutex::new(true)), call_count_2.clone())),
     ];
 
     let config = OrchestratorConfig {
@@ -218,8 +218,49 @@ async fn property_6_scraper_chain_short_circuit_case_2() {
         .await
         .unwrap();
 
-    // Should have one success
     assert_eq!(orchestrator.results().success, 1);
+    assert_eq!(*call_count_1.lock().unwrap(), 1);
+    assert_eq!(*call_count_2.lock().unwrap(), 1);
+}
+
+// Scraper with shared call counter for verification
+struct TestScraper {
+    name: String,
+    should_succeed: Arc<Mutex<bool>>,
+    call_count: Arc<Mutex<usize>>,
+}
+
+impl TestScraper {
+    fn new(name: &str, should_succeed: Arc<Mutex<bool>>, call_count: Arc<Mutex<usize>>) -> Self {
+        Self {
+            name: name.to_string(),
+            should_succeed,
+            call_count,
+        }
+    }
+}
+
+#[async_trait]
+impl ThemeScraper for TestScraper {
+    async fn search_and_download(
+        &self,
+        _show_name: &str,
+        output_path: &Path,
+        _dry_run: bool,
+    ) -> anyhow::Result<bool> {
+        *self.call_count.lock().unwrap() += 1;
+        let should_succeed = *self.should_succeed.lock().unwrap();
+        if should_succeed {
+            fs::write(output_path, b"mock theme data")?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn source_name(&self) -> &'static str {
+        Box::leak(self.name.clone().into_boxed_str())
+    }
 }
 
 // Property 7: Error isolation across shows
@@ -291,6 +332,7 @@ async fn test_dry_run_mode() {
     let temp_dir = TempDir::new().unwrap();
     let show_folder = temp_dir.path().join("TestShow");
     fs::create_dir(&show_folder).unwrap();
+    fs::create_dir(show_folder.join("theme-music")).unwrap();
 
     let config = OrchestratorConfig {
         force: false,
