@@ -1,6 +1,6 @@
 # Audio Theme Downloader
 
-[![Rust](https://github.com/emperor-jimmu/aud-themer/actions/workflows/rust.yml/badge.svg)](https://github.com/emperor-jimmu/aud-themer/actions/workflows/rust.yml)
+[![Build and Publish Release](https://github.com/emperor-jimmu/aud-themer/actions/workflows/main.yml/badge.svg)](https://github.com/emperor-jimmu/aud-themer/actions/workflows/main.yml)
 
 A command-line tool that automates theme song retrieval for TV shows and anime series. Scans local directory structures, identifies shows by folder name, and downloads high-quality theme songs from multiple prioritized sources.
 
