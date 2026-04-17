@@ -30,8 +30,8 @@ A command-line tool that automates theme song retrieval for TV shows and anime s
 
 ```bash
 # Clone the repository
-git clone <repo-url>
-cd audio-theme-downloader
+git clone https://github.com/emperor-jimmu/aud-themer.git
+cd aud-themer
 
 # Build
 cargo build --release
