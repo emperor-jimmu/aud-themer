@@ -42,6 +42,6 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
           # Replace 'YOUR_BINARY_NAME' with the actual output name of your executable
-          gh release create "v$VERSION" target/release/YOUR_BINARY_NAME \
+          gh release create "v$VERSION" target/release/audio-theme-downloader \
             --title "v$VERSION" \
             --generate-notes
