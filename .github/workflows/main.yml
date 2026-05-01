@@ -81,9 +81,10 @@ jobs:
 
       - name: Rename artifacts
         run: |
-          mv artifacts/audio-theme-downloader-linux-x86_64/audio-theme-downloader artifacts/audio-theme-downloader-linux-x86_64
-          mv artifacts/audio-theme-downloader-windows-x86_64.exe/audio-theme-downloader.exe artifacts/audio-theme-downloader-windows-x86_64.exe
-          mv artifacts/audio-theme-downloader-macos-aarch64/audio-theme-downloader artifacts/audio-theme-downloader-macos-aarch64
+          mkdir release-assets
+          mv artifacts/audio-theme-downloader-linux-x86_64/audio-theme-downloader release-assets/audio-theme-downloader-linux-x86_64
+          mv artifacts/audio-theme-downloader-windows-x86_64.exe/audio-theme-downloader.exe release-assets/audio-theme-downloader-windows-x86_64.exe
+          mv artifacts/audio-theme-downloader-macos-aarch64/audio-theme-downloader release-assets/audio-theme-downloader-macos-aarch64
 
       - name: Publish Release and Upload Binaries
         env:
@@ -91,8 +92,8 @@ jobs:
           VERSION: ${{ needs.check-version.outputs.VERSION }}
         run: |
           gh release create "v$VERSION" \
-            artifacts/audio-theme-downloader-linux-x86_64 \
-            artifacts/audio-theme-downloader-windows-x86_64.exe \
-            artifacts/audio-theme-downloader-macos-aarch64 \
+            release-assets/audio-theme-downloader-linux-x86_64 \
+            release-assets/audio-theme-downloader-windows-x86_64.exe \
+            release-assets/audio-theme-downloader-macos-aarch64 \
             --title "v$VERSION" \
             --generate-notes

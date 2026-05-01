@@ -4,6 +4,8 @@
 
 A command-line tool that automates theme song retrieval for TV shows and anime series. Scans local directory structures, identifies shows by folder name, and downloads high-quality theme songs from multiple prioritized sources.
 
+**Supported platforms:** Linux (x86_64) · macOS (Apple Silicon) · Windows 10/11
+
 ## Features
 
 - **Automatic theme discovery**: Scans directories and downloads theme songs automatically
