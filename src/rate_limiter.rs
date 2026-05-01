@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::time::{Duration, sleep};
