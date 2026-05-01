@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       VERSION: ${{ steps.get_version.outputs.VERSION }}
       EXISTS: ${{ steps.check_release.outputs.EXISTS }}
@@ -39,21 +39,29 @@ jobs:
             echo "EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: cargo test
+
   build:
-    needs: check-version
+    needs: [check-version, test]
     if: needs.check-version.outputs.EXISTS == 'false'
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             artifact_name: audio-theme-downloader
             asset_name: audio-theme-downloader-linux-x86_64
-          - os: windows-latest
+          - os: windows-2025
             target: x86_64-pc-windows-msvc
             artifact_name: audio-theme-downloader.exe
             asset_name: audio-theme-downloader-windows-x86_64.exe
-          - os: macos-latest
+          - os: macos-15
             target: aarch64-apple-darwin
             artifact_name: audio-theme-downloader
             asset_name: audio-theme-downloader-macos-aarch64
@@ -68,24 +76,24 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
   publish:
     needs: [check-version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 

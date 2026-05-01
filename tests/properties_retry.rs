@@ -21,7 +21,7 @@ proptest! {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let result = rt.block_on(retry_with_backoff(3, 2.0, move || {
+        let result = rt.block_on(retry_with_backoff(3, 2.0, 0, move || {
             let c = counter_clone.clone();
             async move {
                 let count = c.fetch_add(1, Ordering::SeqCst);
@@ -45,7 +45,7 @@ proptest! {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let result = rt.block_on(retry_with_backoff(max_attempts, 2.0, move || {
+        let result = rt.block_on(retry_with_backoff(max_attempts, 2.0, 0, move || {
             let c = counter_clone.clone();
             async move {
                 c.fetch_add(1, Ordering::SeqCst);
@@ -65,7 +65,7 @@ proptest! {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let result = rt.block_on(retry_with_backoff(3, 2.0, move || {
+        let result = rt.block_on(retry_with_backoff(3, 2.0, 0, move || {
             let c = counter_clone.clone();
             async move {
                 c.fetch_add(1, Ordering::SeqCst);
@@ -84,7 +84,7 @@ async fn test_retry_exactly_three_attempts_on_all_failures() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
 
-    let result = retry_with_backoff(3, 2.0, move || {
+    let result = retry_with_backoff(3, 2.0, 0, move || {
         let c = counter_clone.clone();
         async move {
             c.fetch_add(1, Ordering::SeqCst);
@@ -103,7 +103,7 @@ async fn test_retry_k_equals_zero() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
 
-    let result = retry_with_backoff(3, 2.0, move || {
+    let result = retry_with_backoff(3, 2.0, 0, move || {
         let c = counter_clone.clone();
         async move {
             c.fetch_add(1, Ordering::SeqCst);
@@ -122,7 +122,7 @@ async fn test_retry_k_equals_one() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
 
-    let result = retry_with_backoff(3, 2.0, move || {
+    let result = retry_with_backoff(3, 2.0, 0, move || {
         let c = counter_clone.clone();
         async move {
             let count = c.fetch_add(1, Ordering::SeqCst);
@@ -145,7 +145,7 @@ async fn test_retry_k_equals_two() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = counter.clone();
 
-    let result = retry_with_backoff(3, 2.0, move || {
+    let result = retry_with_backoff(3, 2.0, 0, move || {
         let c = counter_clone.clone();
         async move {
             let count = c.fetch_add(1, Ordering::SeqCst);

@@ -1,6 +1,6 @@
 [package]
 name = "audio-theme-downloader"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["Nimrod Perez"]
 description = "Automate theme song downloads for TV shows and anime"

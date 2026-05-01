@@ -39,7 +39,7 @@ pub enum ContentMode {
 pub struct CliArgs {
     /// Root directory containing show folders
     #[arg(value_name = "INPUT_DIR")]
-    pub input_dir: Option<PathBuf>,
+    pub input_dir: PathBuf,
 
     /// Content type - tv, anime, youtube, or both
     #[arg(short, long, value_enum, default_value_t = ContentMode::Both)]
@@ -234,19 +234,7 @@ fn init_scrapers(
 #[tokio::main]
 async fn main() {
     let args = CliArgs::parse();
-
-    // Handle missing input directory
-    let input_dir = match args.input_dir {
-        Some(dir) => dir,
-        None => {
-            eprintln!("Error: INPUT_DIR is required");
-            eprintln!();
-            eprintln!("Usage: audio-theme-downloader <INPUT_DIR> [OPTIONS]");
-            eprintln!();
-            eprintln!("For more information, try '--help'");
-            process::exit(1);
-        }
-    };
+    let input_dir = args.input_dir.clone();
 
     // Validate input path
     if let Err(err) = validate_input_path(&input_dir) {

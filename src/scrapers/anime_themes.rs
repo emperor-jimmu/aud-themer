@@ -133,6 +133,7 @@ impl AnimeThemesScraper {
         let response = retry_with_backoff(
             Config::MAX_RETRY_ATTEMPTS,
             Config::RETRY_BACKOFF_FACTOR,
+            1000,
             || async {
                 self.client
                     .get(&url)

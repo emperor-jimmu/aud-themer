@@ -67,7 +67,6 @@ impl SharedBrowser {
             let mut config_builder = BrowserConfig::builder()
                 .user_data_dir(&temp_user_data)
                 .new_headless_mode()
-                .no_sandbox()
                 .arg("--disable-blink-features=AutomationControlled")
                 .arg("--disable-gpu")
                 .arg("--disable-extensions")
@@ -224,38 +223,73 @@ impl SharedBrowser {
 
     /// Try to find system-installed Chrome/Chromium
     fn find_system_chrome() -> Option<PathBuf> {
-        // Common Chrome/Chromium installation paths on Windows
-        let possible_paths = vec![
-            // Chrome stable
-            std::env::var("PROGRAMFILES")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
-            std::env::var("PROGRAMFILES(X86)")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
-            std::env::var("LOCALAPPDATA")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
-            // Chromium
-            std::env::var("PROGRAMFILES")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Chromium\\Application\\chrome.exe")),
-            std::env::var("LOCALAPPDATA")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Chromium\\Application\\chrome.exe")),
-            // Edge (Chromium-based)
-            std::env::var("PROGRAMFILES(X86)")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
-            std::env::var("PROGRAMFILES")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
-        ];
+        #[cfg(target_os = "windows")]
+        {
+            let possible_paths = vec![
+                // Chrome stable
+                std::env::var("PROGRAMFILES")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
+                std::env::var("PROGRAMFILES(X86)")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
+                std::env::var("LOCALAPPDATA")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Google\\Chrome\\Application\\chrome.exe")),
+                // Chromium
+                std::env::var("PROGRAMFILES")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Chromium\\Application\\chrome.exe")),
+                std::env::var("LOCALAPPDATA")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Chromium\\Application\\chrome.exe")),
+                // Edge (Chromium-based)
+                std::env::var("PROGRAMFILES(X86)")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
+                std::env::var("PROGRAMFILES")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("Microsoft\\Edge\\Application\\msedge.exe")),
+            ];
 
-        for path in possible_paths.into_iter().flatten() {
-            if path.exists() {
-                tracing::debug!("Found Chrome at: {}", path.display());
-                return Some(path);
+            for path in possible_paths.into_iter().flatten() {
+                if path.exists() {
+                    tracing::debug!("Found Chrome at: {}", path.display());
+                    return Some(path);
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let candidates = [
+                "/usr/bin/google-chrome",
+                "/usr/bin/google-chrome-stable",
+                "/usr/bin/chromium-browser",
+                "/usr/bin/chromium",
+                "/snap/bin/chromium",
+            ];
+            for candidate in candidates {
+                let path = PathBuf::from(candidate);
+                if path.exists() {
+                    tracing::debug!("Found Chrome at: {}", path.display());
+                    return Some(path);
+                }
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let candidates = [
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            ];
+            for candidate in candidates {
+                let path = PathBuf::from(candidate);
+                if path.exists() {
+                    tracing::debug!("Found Chrome at: {}", path.display());
+                    return Some(path);
+                }
             }
         }
 

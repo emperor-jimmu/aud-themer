@@ -6,6 +6,7 @@ use tokio::time::{Duration, sleep};
 /// # Arguments
 /// * `max_attempts` - Maximum number of attempts (including the first try)
 /// * `backoff_factor` - Multiplier for delay between retries (e.g., 2.0 for doubling)
+/// * `initial_delay_ms` - Delay before the first retry in milliseconds
 /// * `operation` - Async function to retry
 ///
 /// # Returns
@@ -14,6 +15,7 @@ use tokio::time::{Duration, sleep};
 pub async fn retry_with_backoff<F, Fut, T, E>(
     max_attempts: u32,
     backoff_factor: f64,
+    initial_delay_ms: u64,
     mut operation: F,
 ) -> Result<T, E>
 where
@@ -22,7 +24,7 @@ where
     E: Display,
 {
     let mut attempt = 0;
-    let mut delay_ms = 1000u64; // Start with 1 second delay
+    let mut delay_ms = initial_delay_ms;
 
     loop {
         attempt += 1;
@@ -70,7 +72,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_retry_succeeds_on_first_attempt() {
-        let result = retry_with_backoff(3, 2.0, || async { Ok::<i32, String>(42) }).await;
+        let result = retry_with_backoff(3, 2.0, 0, || async { Ok::<i32, String>(42) }).await;
         assert_eq!(result, Ok(42));
     }
 
@@ -79,7 +81,7 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let result = retry_with_backoff(3, 2.0, move || {
+        let result = retry_with_backoff(3, 2.0, 0, move || {
             let c = counter_clone.clone();
             async move {
                 let count = c.fetch_add(1, Ordering::SeqCst);
@@ -101,7 +103,7 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let result = retry_with_backoff(3, 2.0, move || {
+        let result = retry_with_backoff(3, 2.0, 0, move || {
             let c = counter_clone.clone();
             async move {
                 c.fetch_add(1, Ordering::SeqCst);

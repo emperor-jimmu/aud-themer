@@ -25,7 +25,6 @@ impl ThemesMoeScraper {
     #[must_use]
     pub fn new(browser: SharedBrowser) -> Self {
         let client = Client::builder()
-            .danger_accept_invalid_certs(true)
             .connect_timeout(std::time::Duration::from_secs(Config::DEFAULT_TIMEOUT_SEC))
             .timeout(std::time::Duration::from_secs(
                 Config::CDN_DOWNLOAD_TIMEOUT_SEC,
@@ -42,11 +41,14 @@ impl ThemesMoeScraper {
 
         let browser_arc = self.browser.get().await?;
         let browser_guard = browser_arc.lock().await;
-        let browser = browser_guard.as_ref().unwrap();
+        let browser = browser_guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Browser was closed unexpectedly"))?;
 
         let page = retry_with_backoff(
             Config::MAX_RETRY_ATTEMPTS,
             Config::RETRY_BACKOFF_FACTOR,
+            1000,
             || async {
                 browser
                     .new_page("about:blank")
